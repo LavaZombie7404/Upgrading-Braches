@@ -104,23 +104,55 @@ const WORLD1: TreeNode[] = [
 
   // Row 7 — the gateway --------------------------------------------------------
   { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
+
+  // Rows 8+ — a deliberately USELESS bonus tree hanging off the gateway. Every
+  // node is ×1 (no effect), bought with World 1 currency you no longer need.
+  // Revealed only after "Unlock World 2" is purchased. Pure flavor.
+  { id: 18, name: 'Bragging Rights', desc: 'The number goes up. That is all.', cost: 1000, parent: 17, effect: Effect.GlobalMul, value: 1, world: 1, col: 4, row: 8 },
+  { id: 19, name: 'Participation Trophy', desc: 'You showed up. Congrats.', cost: 2500, parent: 18, effect: Effect.GlobalMul, value: 1, world: 1, col: 2, row: 9 },
+  { id: 20, name: 'Decorative Plant', desc: 'It really ties the tree together.', cost: 2500, parent: 18, effect: Effect.GlobalMul, value: 1, world: 1, col: 6, row: 9 },
+  { id: 21, name: 'Existential Dread', desc: 'Why are you still clicking?', cost: 7500, parent: 19, effect: Effect.GlobalMul, value: 1, world: 1, col: 2, row: 10 },
+  { id: 22, name: 'Certificate of Nothing', desc: 'Suitable for framing.', cost: 7500, parent: 20, effect: Effect.GlobalMul, value: 1, world: 1, col: 6, row: 10 },
 ];
 
-// Generated worlds (2..N) share this 7-node template. Each has its own currency
-// starting at zero, so it runs a fresh, World-1-scale progression. `parentGateId`
-// is the previous world's gateway node, which gates this world's free entry.
+/** Each generated world deals in ~WORLD_SCALE× bigger numbers than the previous. */
+const WORLD_SCALE = 5;
+
+interface WorldTheme {
+  title: string;
+  /** Node names in template order: [root, click+, sec+, clickMul, secMul, globalMul]. */
+  nodes: [string, string, string, string, string, string];
+}
+
+// Distinct theme per generated world (index = worldId - 2). World 2 keeps the
+// original names so its balance/feel is unchanged.
+const THEMES: WorldTheme[] = [
+  { title: 'Quantum Reach', nodes: ['Nexus', 'Quantum Clicks', 'Plasma Generator', 'Time Warp', 'Antimatter', 'Cosmic Synergy'] },
+  { title: 'Stellar Forge', nodes: ['Stardust', 'Solar Taps', 'Fusion Reactor', 'Nova Burst', 'Pulsar Core', 'Galactic Harmony'] },
+  { title: 'Void Dominion', nodes: ['Rift', 'Dark Clicks', 'Void Engine', 'Singular Pulse', 'Entropy Coil', 'Abyssal Unity'] },
+  { title: 'Chrono Spire', nodes: ['Origin', 'Tempo Taps', 'Chrono Mill', 'Warp Cascade', 'Epoch Drive', 'Eternal Sync'] },
+  { title: 'Aether Crown', nodes: ['Spark', 'Aether Taps', 'Mana Wellspring', 'Surge Rite', 'Ley Reactor', 'Arcane Concord'] },
+  { title: 'Omega Throne', nodes: ['Genesis', 'Omega Clicks', 'Infinity Core', 'Apex Strike', 'Eternity Engine', 'Absolute Synergy'] },
+];
+
+// Generated worlds (2..N) share one 7-node shape, but each gets its own theme
+// and scale factor `f`. Costs AND flat income (ClickAdd/SecAdd) scale by `f`
+// together, while multipliers stay constant — so deeper worlds show bigger
+// numbers at the same pacing. `parentGateId` gates this world's free entry.
 function makeWorld(worldId: number, start: number, parentGateId: number, last: boolean): TreeNode[] {
+  const f = Math.pow(WORLD_SCALE, worldId - 2); // 1, 5, 25, ... for worlds 2, 3, 4, ...
+  const n = THEMES[worldId - 2].nodes;
   const gatewayId = start + NODES_PER_WORLD - 1;
   const gateway: TreeNode = last
-    ? { id: gatewayId, name: 'Final Ascension', desc: 'Reach it to win.', cost: 4000, parent: start + 5, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: 3, row: 4 }
-    : { id: gatewayId, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost: 4000, parent: start + 5, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: 3, row: 4 };
+    ? { id: gatewayId, name: 'Final Ascension', desc: 'Reach it to win.', cost: 4000 * f, parent: start + 5, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: 3, row: 4 }
+    : { id: gatewayId, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost: 4000 * f, parent: start + 5, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: 3, row: 4 };
   return [
-    { id: start + 0, name: 'Nexus', desc: 'A new realm. (Free)', cost: 0, parent: parentGateId, effect: Effect.ClickAdd, value: 1, world: worldId, col: 3, row: 0 },
-    { id: start + 1, name: 'Quantum Clicks', desc: 'Every tap counts more.', cost: 20, parent: start + 0, effect: Effect.ClickAdd, value: 3, world: worldId, col: 1, row: 1 },
-    { id: start + 2, name: 'Plasma Generator', desc: 'Passive flow.', cost: 40, parent: start + 0, effect: Effect.SecAdd, value: 2, world: worldId, col: 5, row: 1 },
-    { id: start + 3, name: 'Time Warp', desc: 'Click power ×3.', cost: 120, parent: start + 1, effect: Effect.ClickMul, value: 3, world: worldId, col: 1, row: 2 },
-    { id: start + 4, name: 'Antimatter', desc: 'Generators ×2.', cost: 200, parent: start + 2, effect: Effect.SecMul, value: 2, world: worldId, col: 5, row: 2 },
-    { id: start + 5, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 800, parent: start + 4, effect: Effect.GlobalMul, value: 3, world: worldId, col: 3, row: 3 },
+    { id: start + 0, name: n[0], desc: 'A new realm. (Free)', cost: 0, parent: parentGateId, effect: Effect.ClickAdd, value: 1 * f, world: worldId, col: 3, row: 0 },
+    { id: start + 1, name: n[1], desc: 'Every tap counts more.', cost: 20 * f, parent: start + 0, effect: Effect.ClickAdd, value: 3 * f, world: worldId, col: 1, row: 1 },
+    { id: start + 2, name: n[2], desc: 'Passive flow.', cost: 40 * f, parent: start + 0, effect: Effect.SecAdd, value: 2 * f, world: worldId, col: 5, row: 1 },
+    { id: start + 3, name: n[3], desc: 'Click power ×3.', cost: 120 * f, parent: start + 1, effect: Effect.ClickMul, value: 3, world: worldId, col: 1, row: 2 },
+    { id: start + 4, name: n[4], desc: 'Generators ×2.', cost: 200 * f, parent: start + 2, effect: Effect.SecMul, value: 2, world: worldId, col: 5, row: 2 },
+    { id: start + 5, name: n[5], desc: 'All output ×3.', cost: 800 * f, parent: start + 4, effect: Effect.GlobalMul, value: 3, world: worldId, col: 3, row: 3 },
     gateway,
   ];
 }

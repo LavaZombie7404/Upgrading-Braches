@@ -182,12 +182,30 @@ test('completing a world unlocks the next one via its gateway', async ({ page })
   await expect(page.locator('.toast')).toContainText('World 3 unlocked');
 });
 
+test('the useless bonus tree reveals after Unlock World 2 and does nothing', async ({ page }) => {
+  // World 1 nearly complete; buy the gateway to reveal the bonus tree.
+  await seedSave(page, mkSave(range(17), { 0: { points: 300000, totalEarned: 300000 } }));
+  await page.goto('/');
+
+  await expect(node(page, 'Bragging Rights')).toBeHidden();
+  await node(page, 'Unlock World 2').click();
+  await expect(node(page, 'Bragging Rights')).toBeVisible();
+
+  // It's a ×1 node — buying it must not change the economy.
+  const perClickBefore = await hudValue(page, 'Per click').textContent();
+  await node(page, 'Bragging Rights').click();
+  await expect(node(page, 'Bragging Rights')).toHaveClass(/is-purchased/);
+  await expect(hudValue(page, 'Per click')).toHaveText(perClickBefore!);
+});
+
 test('buying the final node in the last world wins the game', async ({ page }) => {
-  // Everything owned except the very last node; fund the last world.
+  // Everything owned except the very last node; fund the last world. The last
+  // world's costs are scaled up (WORLD_SCALE^5), so it needs a big balance.
   const lastWorldIndex = NUM_WORLDS - 1;
-  const totalNodes = 18 + (NUM_WORLDS - 1) * 7; // World 1 (18) + 7 per generated world
+  const WORLD1_NODES = 23; // tutorial tree (18) + useless bonus tree (5)
+  const totalNodes = WORLD1_NODES + (NUM_WORLDS - 1) * 7;
   await seedSave(page, mkSave(range(totalNodes - 1), {
-    [lastWorldIndex]: { points: 50000, totalEarned: 50000 },
+    [lastWorldIndex]: { points: 20_000_000, totalEarned: 20_000_000 },
   }));
   await page.goto('/');
 
