@@ -33,6 +33,7 @@ export class GameUI {
   private readonly handlers: UIHandlers;
 
   private elPoints!: HTMLElement;
+  private elPointsLabel!: HTMLElement;
   private elPerSec!: HTMLElement;
   private elPerClick!: HTMLElement;
   private worldSelect!: HTMLSelectElement;
@@ -78,8 +79,14 @@ export class GameUI {
 
     // --- HUD ---
     const hud = el('header', 'hud');
+    // The points stat is labelled with the active world's currency name; keep a
+    // ref to its label so refresh() can update it on world switch.
+    const pointsStat = el('div', 'hud__stat hud__stat--points');
+    this.elPointsLabel = el('span', 'hud__label');
+    this.elPoints = el('span', 'hud__value');
+    pointsStat.append(this.elPointsLabel, this.elPoints);
     hud.append(
-      stat('Points', (this.elPoints = el('span', 'hud__value'))),
+      pointsStat,
       stat('Per second', (this.elPerSec = el('span', 'hud__value'))),
       stat('Per click', (this.elPerClick = el('span', 'hud__value')))
     );
@@ -225,8 +232,9 @@ export class GameUI {
 
   /** Refresh all live values. Called every animation frame. */
   refresh(): void {
-    // HUD shows the ACTIVE world's independent economy.
+    // HUD shows the ACTIVE world's independent economy and currency name.
     const idx = this.activeWorldIndex;
+    this.elPointsLabel.textContent = WORLDS[idx].currency;
     this.elPoints.textContent = formatNumber(this.engine.pointsOf(idx));
     this.elPerSec.textContent = formatNumber(this.engine.perSecOf(idx));
     this.elPerClick.textContent = formatNumber(this.engine.perClickOf(idx));
@@ -281,7 +289,7 @@ export class GameUI {
     const h = el('h2');
     h.textContent = 'You conquered every world! 🎉';
     const p = el('p');
-    p.textContent = `Lifetime points earned: ${formatNumber(this.engine.totalEarnedAll())}`;
+    p.textContent = `Total lifetime output across all worlds: ${formatNumber(this.engine.totalEarnedAll())}`;
     const close = el('button', 'win-overlay__close') as HTMLButtonElement;
     close.type = 'button';
     close.textContent = 'Keep playing';

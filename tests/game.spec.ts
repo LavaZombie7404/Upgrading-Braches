@@ -17,6 +17,10 @@ interface SaveState {
 const hudValue = (page: Page, label: string) =>
   page.locator('.hud__stat', { hasText: label }).locator('.hud__value');
 
+// The points stat's label is the active world's currency name, so locate its
+// value by a stable class instead of by label text.
+const pointsValue = (page: Page) => page.locator('.hud__stat--points .hud__value');
+
 const node = (page: Page, name: string) =>
   page.locator('.node', { hasText: name });
 
@@ -47,7 +51,7 @@ test.beforeEach(async ({ page }) => {
 test('boots with only the free root node revealed', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.click-btn')).toBeVisible();
-  await expect(hudValue(page, 'Points')).toHaveText('0');
+  await expect(pointsValue(page)).toHaveText('0');
   await expect(hudValue(page, 'Per click')).toHaveText('1');
   // Locked nodes are hidden — only the root "Awakening" shows at the start.
   await expect(page.locator('.node:visible')).toHaveCount(1);
@@ -65,14 +69,14 @@ test('clicking the button earns points', async ({ page }) => {
   await page.goto('/');
   const clickBtn = page.locator('.click-btn');
   for (let i = 0; i < 5; i++) await clickBtn.click();
-  await expect(hudValue(page, 'Points')).toHaveText('5');
+  await expect(pointsValue(page)).toHaveText('5');
 });
 
 test('pressing Space earns points', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.click-btn')).toBeVisible(); // wait for the engine to load
   for (let i = 0; i < 4; i++) await page.keyboard.press('Space');
-  await expect(hudValue(page, 'Points')).toHaveText('4');
+  await expect(pointsValue(page)).toHaveText('4');
 });
 
 test('holding Space earns only one point per press', async ({ page }) => {
@@ -83,7 +87,7 @@ test('holding Space earns only one point per press', async ({ page }) => {
   await page.keyboard.down('Space');
   await page.keyboard.down('Space');
   await page.keyboard.up('Space');
-  await expect(hudValue(page, 'Points')).toHaveText('1');
+  await expect(pointsValue(page)).toHaveText('1');
 });
 
 test('the free root is buyable immediately and reveals its children', async ({ page }) => {
@@ -101,7 +105,7 @@ test('the free root is buyable immediately and reveals its children', async ({ p
   // Bought for free: owned, points unchanged, per-click effect (+1) applied.
   await expect(awakening).toHaveClass(/is-purchased/);
   await expect(awakening).toContainText('owned');
-  await expect(hudValue(page, 'Points')).toHaveText('0');
+  await expect(pointsValue(page)).toHaveText('0');
   await expect(hudValue(page, 'Per click')).toHaveText('2');
 
   // ...and its children are now revealed.
@@ -123,7 +127,7 @@ test('idle generators accrue points over time', async ({ page }) => {
 
   await expect(hudValue(page, 'Per second')).toHaveText('1');
   // Points should climb from idle generation without any clicking.
-  await expect.poll(async () => Number(await hudValue(page, 'Points').textContent())).toBeGreaterThan(1);
+  await expect.poll(async () => Number(await pointsValue(page).textContent())).toBeGreaterThan(1);
 });
 
 test('World 2 is locked in the dropdown until its gateway is bought', async ({ page }) => {
@@ -149,18 +153,21 @@ test('each world keeps its own independent currency', async ({ page }) => {
   await seedSave(page, mkSave([17], { 0: { points: 500, totalEarned: 500 } }));
   await page.goto('/');
 
-  await expect(hudValue(page, 'Points')).toHaveText('500'); // World 1 currency
+  const currencyLabel = page.locator('.hud__stat--points .hud__label');
+  await expect(pointsValue(page)).toHaveText('500'); // World 1 currency
+  await expect(currencyLabel).toHaveText('Points');
 
   await page.locator('.world-select').selectOption('2');
-  await expect(hudValue(page, 'Points')).toHaveText('0'); // World 2's own currency
+  await expect(pointsValue(page)).toHaveText('0'); // World 2's own currency
+  await expect(currencyLabel).toHaveText('Quanta'); // ...with its own name
 
   const clickBtn = page.locator('.click-btn');
   for (let i = 0; i < 3; i++) await clickBtn.click();
-  await expect(hudValue(page, 'Points')).toHaveText('3'); // earned in World 2
+  await expect(pointsValue(page)).toHaveText('3'); // earned in World 2
 
   // Switching back, World 1's balance is untouched by World 2 clicks.
   await page.locator('.world-select').selectOption('1');
-  await expect(hudValue(page, 'Points')).toHaveText('500');
+  await expect(pointsValue(page)).toHaveText('500');
 });
 
 test('completing a world unlocks the next one via its gateway', async ({ page }) => {

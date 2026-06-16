@@ -44,6 +44,8 @@ export interface TreeNode {
 export interface World {
   id: number;
   name: string;
+  /** Display name of this world's independent currency (shown in the HUD). */
+  currency: string;
   /** Node that must be purchased to unlock this world, or null if always open. */
   unlockNodeId: number | null;
 }
@@ -134,6 +136,8 @@ interface NodeSpec {
 
 interface WorldBlueprint {
   title: string;
+  /** This world's independent currency name. */
+  currency: string;
   /** node[0] is the free entry root; the LAST node is the completion/gateway
    *  (its name/effect are overridden to "Unlock World N+1" or "Final Ascension"). */
   nodes: NodeSpec[];
@@ -146,6 +150,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 2 — "Quantum Reach": a 2-wide diamond (unchanged from before).
   {
     title: 'Quantum Reach',
+    currency: 'Quanta',
     nodes: [
       { name: 'Nexus', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
       { name: 'Quantum Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 3, cost: 20, col: 1, row: 1 },
@@ -159,6 +164,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 3 — "Stellar Forge": a 3-wide fan that narrows to a spire.
   {
     title: 'Stellar Forge',
+    currency: 'Stardust',
     nodes: [
       { name: 'Stardust', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
       { name: 'Solar Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 4, cost: 25, col: 1, row: 1 },
@@ -173,6 +179,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 4 — "Void Dominion": a tall, narrow spine with a single offshoot.
   {
     title: 'Void Dominion',
+    currency: 'Void Shards',
     nodes: [
       { name: 'Rift', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 2, row: 0 },
       { name: 'Dark Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 5, cost: 30, col: 2, row: 1 },
@@ -185,6 +192,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 5 — "Chrono Spire": a stacked double-diamond.
   {
     title: 'Chrono Spire',
+    currency: 'Chronons',
     nodes: [
       { name: 'Origin', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
       { name: 'Tempo Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 3, cost: 25, col: 1, row: 1 },
@@ -200,6 +208,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 6 — "Aether Crown": a bushy binary tree (four leaves).
   {
     title: 'Aether Crown',
+    currency: 'Aether',
     nodes: [
       { name: 'Spark', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 4, row: 0 },
       { name: 'Aether Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 4, cost: 25, col: 2, row: 1 },
@@ -215,6 +224,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
   // World 7 — "Omega Throne": a grand, two-tower structure into the finale.
   {
     title: 'Omega Throne',
+    currency: 'Omega',
     nodes: [
       { name: 'Genesis', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 4, row: 0 },
       { name: 'Omega Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 5, cost: 30, col: 2, row: 1 },
@@ -231,20 +241,15 @@ const BLUEPRINTS: WorldBlueprint[] = [
   },
 ];
 
-// Each world also gets a side grid of optional BONUS upgrades hanging off its
-// free root — extra depth without touching the critical path.
-const EXTRA_COLS = 4;
-const EXTRA_ROWS = 4; // EXTRA_COLS * EXTRA_ROWS bonus nodes per generated world
-
 // Instantiate one world from its blueprint: assign global ids, chain the entry
-// root to the previous world's gateway, apply the scale factor, turn the last
-// blueprint node into the gateway, then append the bonus grid.
+// root to the previous world's gateway, apply the scale factor, and turn the
+// last blueprint node into the gateway ("Unlock World N+1") or victory node.
 function makeWorld(worldId: number, start: number, parentGateId: number, last: boolean): TreeNode[] {
   const f = Math.pow(WORLD_SCALE, worldId - 2); // 1, 5, 25, ... for worlds 2, 3, 4, ...
   const bp = BLUEPRINTS[worldId - 2];
   const coreLen = bp.nodes.length;
 
-  const core: TreeNode[] = bp.nodes.map((spec, i) => {
+  return bp.nodes.map((spec, i) => {
     const id = start + i;
     const parent = spec.parent < 0 ? parentGateId : start + spec.parent;
     const cost = spec.cost * f;
@@ -257,46 +262,21 @@ function makeWorld(worldId: number, start: number, parentGateId: number, last: b
     const scales = spec.effect === Effect.ClickAdd || spec.effect === Effect.SecAdd;
     return { id, name: spec.name, desc: spec.desc, cost, parent, effect: spec.effect, value: scales ? spec.value * f : spec.value, world: worldId, col: spec.col, row: spec.row };
   });
-
-  // Bonus grid: EXTRA_COLS chains of EXTRA_ROWS, each chain rooted at the world's
-  // free entry node, laid out to the right of the main tree.
-  const extras: TreeNode[] = [];
-  for (let k = 0; k < EXTRA_COLS * EXTRA_ROWS; k++) {
-    const c = Math.floor(k / EXTRA_ROWS);
-    const r = k % EXTRA_ROWS;
-    const id = start + coreLen + k;
-    const parent = r === 0 ? start : id - 1; // top of each column hangs off the root
-    const isClick = c % 2 === 0;
-    extras.push({
-      id,
-      name: `${isClick ? 'Bonus Tap' : 'Bonus Flow'} ${k + 1}`,
-      desc: isClick ? 'Optional bonus: more per click.' : 'Optional bonus: more per second.',
-      cost: 250 * (k + 1) * f,
-      parent,
-      effect: isClick ? Effect.ClickAdd : Effect.SecAdd,
-      value: (r + 1) * f,
-      world: worldId,
-      col: 8 + c,
-      row: r,
-    });
-  }
-
-  return [...core, ...extras];
 }
 
 export const TREE: TreeNode[] = [...WORLD1];
-export const WORLDS: World[] = [{ id: 1, name: 'World 1', unlockNodeId: null }];
+export const WORLDS: World[] = [{ id: 1, name: 'World 1', currency: 'Points', unlockNodeId: null }];
 
 // Build worlds 2..TOTAL_WORLDS, chaining each to the previous world's gateway.
 {
   let prevGateway = 17; // World 1's "Unlock World 2" node
   let nextId = WORLD1.length;
   for (let w = 2; w <= TOTAL_WORLDS; w++) {
-    WORLDS.push({ id: w, name: `World ${w}`, unlockNodeId: prevGateway });
     const bp = BLUEPRINTS[w - 2];
+    WORLDS.push({ id: w, name: `World ${w}`, currency: bp.currency, unlockNodeId: prevGateway });
     const nodes = makeWorld(w, nextId, prevGateway, w === TOTAL_WORLDS);
     TREE.push(...nodes);
-    prevGateway = nextId + bp.nodes.length - 1; // gateway = last CORE node (before the bonus grid)
+    prevGateway = nextId + bp.nodes.length - 1; // gateway = the world's last node
     nextId += nodes.length;
   }
 }
