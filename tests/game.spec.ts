@@ -38,6 +38,17 @@ test('pressing Space earns points', async ({ page }) => {
   await expect(hudValue(page, 'Points')).toHaveText('4');
 });
 
+test('holding Space earns only one point per press', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.click-btn')).toBeVisible();
+  // First keydown counts; subsequent auto-repeat keydowns are ignored.
+  await page.keyboard.down('Space');
+  await page.keyboard.down('Space');
+  await page.keyboard.down('Space');
+  await page.keyboard.up('Space');
+  await expect(hudValue(page, 'Points')).toHaveText('1');
+});
+
 test('the free root is buyable immediately and reveals its children', async ({ page }) => {
   await page.goto('/');
   const awakening = node(page, 'Awakening');
