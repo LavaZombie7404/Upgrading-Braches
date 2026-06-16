@@ -76,7 +76,7 @@ test('nodes behind an unmet prerequisite are hidden', async ({ page }) => {
   await page.goto('/');
   // Deeper nodes are not revealed until their prerequisites are bought.
   await expect(node(page, 'Double Tap')).toBeHidden();
-  await expect(node(page, 'The End')).toBeHidden();
+  await expect(node(page, 'Unlock World 2')).toBeHidden();
 });
 
 test('idle generators accrue points over time', async ({ page }) => {
@@ -92,8 +92,8 @@ test('idle generators accrue points over time', async ({ page }) => {
   await expect.poll(async () => Number(await hudValue(page, 'Points').textContent())).toBeGreaterThan(1);
 });
 
-test('buying The End node wins the game', async ({ page }) => {
-  // Seed a save with every prerequisite owned and points to spare.
+test('World 2 is locked in the dropdown until its gateway is bought', async ({ page }) => {
+  // Seed: all of World 1 except the gateway owned, with points to spare.
   const purchased = Array.from({ length: 17 }, (_, i) => i); // nodes 0..16
   await page.addInitScript(
     ([key, state]) => localStorage.setItem(key, state),
@@ -101,10 +101,38 @@ test('buying The End node wins the game', async ({ page }) => {
   );
   await page.goto('/');
 
-  const end = node(page, 'The End');
-  await expect(end).toHaveClass(/is-buyable/);
-  await end.click();
+  const world2Opt = page.locator('.world-select option', { hasText: 'World 2' });
+  await expect(world2Opt).toHaveJSProperty('disabled', true);
+
+  // Buy the gateway node.
+  const gate = node(page, 'Unlock World 2');
+  await expect(gate).toHaveClass(/is-buyable/);
+  await gate.click();
+  await expect(gate).toHaveClass(/is-purchased/);
+
+  // World 2 is now selectable.
+  await expect(world2Opt).toHaveJSProperty('disabled', false);
+});
+
+test('selecting World 2 shows its tree, and the final node wins', async ({ page }) => {
+  // Seed all of World 1 (incl. gateway) owned, with plenty of points.
+  const purchased = Array.from({ length: 18 }, (_, i) => i); // nodes 0..17
+  await page.addInitScript(
+    ([key, state]) => localStorage.setItem(key, state),
+    [SAVE_KEY, JSON.stringify({ points: 1e9, totalEarned: 1e9, purchased })] as const
+  );
+  await page.goto('/');
+
+  await page.locator('.world-select').selectOption('2');
+  await expect(node(page, 'Nexus')).toBeVisible();
+
+  // Buy the path to the final node.
+  for (const name of ['Nexus', 'Plasma Generator', 'Antimatter', 'Cosmic Synergy', 'Final Ascension']) {
+    const nd = node(page, name);
+    await expect(nd).toHaveClass(/is-buyable/);
+    await nd.click();
+  }
 
   await expect(page.locator('.win-overlay')).toBeVisible();
-  await expect(page.locator('.win-overlay__card')).toContainText('You reached The End');
+  await expect(page.locator('.win-overlay__card')).toContainText('conquered every world');
 });

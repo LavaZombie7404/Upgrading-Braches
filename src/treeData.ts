@@ -2,9 +2,14 @@
 // The upgrade tree — single source of truth.
 //
 // Numeric fields (cost, parent, effect, value, isEnd) are pushed into the WASM
-// engine at startup. Presentation fields (name, desc, col, row) stay in TS and
-// drive rendering only. `id` ties the two halves together and MUST equal the
-// node's index in this array.
+// engine at startup. Presentation fields (name, desc, col, row, world) stay in
+// TS and drive rendering only. `id` ties the two halves together and MUST equal
+// the node's index in this array.
+//
+// Worlds are a presentation grouping over a single node graph: all worlds share
+// one points pool and every owned upgrade keeps contributing. The dropdown just
+// changes which world's subtree is shown. World 2's entry node depends on the
+// "Unlock World 2" node in World 1, so the engine gates it automatically.
 // =============================================================================
 
 /** Effect kinds — keep in sync with the EFF_* constants in assembly/index.ts. */
@@ -27,13 +32,30 @@ export interface TreeNode {
   value: number;
   /** Buying an `isEnd` node wins the game. */
   isEnd?: boolean;
-  /** Grid coordinates for layout (col = horizontal, row = depth). */
+  /** If set, buying this node unlocks the given world in the dropdown. */
+  unlocksWorld?: number;
+  /** Which world this node belongs to (for the dropdown + rendering). */
+  world: number;
+  /** Grid coordinates for layout within its world (col = horizontal, row = depth). */
   col: number;
   row: number;
 }
 
-// A short, human-readable summary of a node's effect (used in tooltips/labels).
+export interface World {
+  id: number;
+  name: string;
+  /** Node that must be purchased to unlock this world, or null if always open. */
+  unlockNodeId: number | null;
+}
+
+export const WORLDS: World[] = [
+  { id: 1, name: 'World 1', unlockNodeId: null },
+  { id: 2, name: 'World 2', unlockNodeId: 17 },
+];
+
+// A short, human-readable summary of a node's effect (used in labels/tooltips).
 export function effectText(n: TreeNode): string {
+  if (n.unlocksWorld) return `Unlocks World ${n.unlocksWorld}`;
   switch (n.effect) {
     case Effect.ClickAdd:
       return `+${n.value} per click`;
@@ -49,37 +71,61 @@ export function effectText(n: TreeNode): string {
 }
 
 export const TREE: TreeNode[] = [
+  // === WORLD 1 ===============================================================
   // Root ----------------------------------------------------------------------
-  { id: 0, name: 'Awakening', desc: 'It begins. (Free)', cost: 0, parent: -1, effect: Effect.ClickAdd, value: 1, col: 3, row: 0 },
+  { id: 0, name: 'Awakening', desc: 'It begins. (Free)', cost: 0, parent: -1, effect: Effect.ClickAdd, value: 1, world: 1, col: 3, row: 0 },
 
   // Row 1 — the fork: click power (left) vs. automation (right) ----------------
-  { id: 1, name: 'Sharper Clicks', desc: 'Every tap counts more.', cost: 15, parent: 0, effect: Effect.ClickAdd, value: 2, col: 1, row: 1 },
-  { id: 2, name: 'First Generator', desc: 'Points while you idle.', cost: 35, parent: 0, effect: Effect.SecAdd, value: 1, col: 5, row: 1 },
+  { id: 1, name: 'Sharper Clicks', desc: 'Every tap counts more.', cost: 15, parent: 0, effect: Effect.ClickAdd, value: 2, world: 1, col: 1, row: 1 },
+  { id: 2, name: 'First Generator', desc: 'Points while you idle.', cost: 35, parent: 0, effect: Effect.SecAdd, value: 1, world: 1, col: 5, row: 1 },
 
   // Row 2 ----------------------------------------------------------------------
-  { id: 3, name: 'Double Tap', desc: 'Click power doubled.', cost: 65, parent: 1, effect: Effect.ClickMul, value: 2, col: 0, row: 2 },
-  { id: 4, name: 'Click Surge', desc: 'A burst of force.', cost: 100, parent: 1, effect: Effect.ClickAdd, value: 5, col: 2, row: 2 },
-  { id: 5, name: 'Generator II', desc: 'More passive flow.', cost: 140, parent: 2, effect: Effect.SecAdd, value: 3, col: 4, row: 2 },
-  { id: 6, name: 'Overclock', desc: 'Generators run hot.', cost: 175, parent: 2, effect: Effect.SecMul, value: 1.5, col: 6, row: 2 },
+  { id: 3, name: 'Double Tap', desc: 'Click power doubled.', cost: 65, parent: 1, effect: Effect.ClickMul, value: 2, world: 1, col: 0, row: 2 },
+  { id: 4, name: 'Click Surge', desc: 'A burst of force.', cost: 100, parent: 1, effect: Effect.ClickAdd, value: 5, world: 1, col: 2, row: 2 },
+  { id: 5, name: 'Generator II', desc: 'More passive flow.', cost: 140, parent: 2, effect: Effect.SecAdd, value: 3, world: 1, col: 4, row: 2 },
+  { id: 6, name: 'Overclock', desc: 'Generators run hot.', cost: 175, parent: 2, effect: Effect.SecMul, value: 1.5, world: 1, col: 6, row: 2 },
 
   // Row 3 ----------------------------------------------------------------------
-  { id: 7, name: 'Power Clicks', desc: 'Click power doubled again.', cost: 350, parent: 4, effect: Effect.ClickMul, value: 2, col: 2, row: 3 },
-  { id: 8, name: 'Auto Factory', desc: 'Serious automation.', cost: 420, parent: 5, effect: Effect.SecAdd, value: 10, col: 4, row: 3 },
-  { id: 9, name: 'Fusion', desc: 'Generators doubled.', cost: 550, parent: 6, effect: Effect.SecMul, value: 2, col: 6, row: 3 },
+  { id: 7, name: 'Power Clicks', desc: 'Click power doubled again.', cost: 350, parent: 4, effect: Effect.ClickMul, value: 2, world: 1, col: 2, row: 3 },
+  { id: 8, name: 'Auto Factory', desc: 'Serious automation.', cost: 420, parent: 5, effect: Effect.SecAdd, value: 10, world: 1, col: 4, row: 3 },
+  { id: 9, name: 'Fusion', desc: 'Generators doubled.', cost: 550, parent: 6, effect: Effect.SecMul, value: 2, world: 1, col: 6, row: 3 },
 
   // Row 4 ----------------------------------------------------------------------
-  { id: 10, name: 'Synergy Core', desc: 'All output boosted.', cost: 1400, parent: 7, effect: Effect.GlobalMul, value: 1.5, col: 2, row: 4 },
-  { id: 11, name: 'Mega Generator', desc: 'Industrial scale.', cost: 1750, parent: 8, effect: Effect.SecAdd, value: 50, col: 4, row: 4 },
-  { id: 12, name: 'Hyperdrive', desc: 'Generators doubled.', cost: 2000, parent: 9, effect: Effect.SecMul, value: 2, col: 6, row: 4 },
+  { id: 10, name: 'Synergy Core', desc: 'All output boosted.', cost: 1400, parent: 7, effect: Effect.GlobalMul, value: 1.5, world: 1, col: 2, row: 4 },
+  { id: 11, name: 'Mega Generator', desc: 'Industrial scale.', cost: 1750, parent: 8, effect: Effect.SecAdd, value: 50, world: 1, col: 4, row: 4 },
+  { id: 12, name: 'Hyperdrive', desc: 'Generators doubled.', cost: 2000, parent: 9, effect: Effect.SecMul, value: 2, world: 1, col: 6, row: 4 },
 
   // Row 5 ----------------------------------------------------------------------
-  { id: 13, name: 'Click Mastery', desc: 'Click power ×5.', cost: 5500, parent: 10, effect: Effect.ClickMul, value: 5, col: 2, row: 5 },
-  { id: 14, name: 'Singularity', desc: 'All output doubled.', cost: 7000, parent: 11, effect: Effect.GlobalMul, value: 2, col: 4, row: 5 },
-  { id: 15, name: 'Reactor', desc: 'Generators tripled.', cost: 8000, parent: 12, effect: Effect.SecMul, value: 3, col: 6, row: 5 },
+  { id: 13, name: 'Click Mastery', desc: 'Click power ×5.', cost: 5500, parent: 10, effect: Effect.ClickMul, value: 5, world: 1, col: 2, row: 5 },
+  { id: 14, name: 'Singularity', desc: 'All output doubled.', cost: 7000, parent: 11, effect: Effect.GlobalMul, value: 2, world: 1, col: 4, row: 5 },
+  { id: 15, name: 'Reactor', desc: 'Generators tripled.', cost: 8000, parent: 12, effect: Effect.SecMul, value: 3, world: 1, col: 6, row: 5 },
 
   // Row 6 — convergence --------------------------------------------------------
-  { id: 16, name: 'Ascension', desc: 'All output ×3.', cost: 35000, parent: 14, effect: Effect.GlobalMul, value: 3, col: 4, row: 6 },
+  { id: 16, name: 'Ascension', desc: 'All output ×3.', cost: 35000, parent: 14, effect: Effect.GlobalMul, value: 3, world: 1, col: 4, row: 6 },
 
-  // Row 7 — the goal -----------------------------------------------------------
-  { id: 17, name: 'The End', desc: 'Reach it to win.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, isEnd: true, col: 4, row: 7 },
+  // Row 7 — the gateway --------------------------------------------------------
+  { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
+
+  // === WORLD 2 ===============================================================
+  // Entry (depends on "Unlock World 2") ---------------------------------------
+  { id: 18, name: 'Nexus', desc: 'A new realm of power.', cost: 300000, parent: 17, effect: Effect.SecAdd, value: 500, world: 2, col: 3, row: 0 },
+
+  // Row 1 ----------------------------------------------------------------------
+  { id: 19, name: 'Quantum Clicks', desc: 'Click power ×3.', cost: 500000, parent: 18, effect: Effect.ClickMul, value: 3, world: 2, col: 1, row: 1 },
+  { id: 20, name: 'Plasma Generator', desc: 'Vast passive flow.', cost: 600000, parent: 18, effect: Effect.SecAdd, value: 2000, world: 2, col: 5, row: 1 },
+
+  // Row 2 ----------------------------------------------------------------------
+  { id: 21, name: 'Time Warp', desc: 'Click power ×5.', cost: 1200000, parent: 19, effect: Effect.ClickMul, value: 5, world: 2, col: 1, row: 2 },
+  { id: 22, name: 'Antimatter', desc: 'Generators ×3.', cost: 1500000, parent: 20, effect: Effect.SecMul, value: 3, world: 2, col: 5, row: 2 },
+
+  // Row 3 — convergence --------------------------------------------------------
+  { id: 23, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 5000000, parent: 22, effect: Effect.GlobalMul, value: 3, world: 2, col: 3, row: 3 },
+
+  // Row 4 — the goal -----------------------------------------------------------
+  { id: 24, name: 'Final Ascension', desc: 'Reach it to win.', cost: 20000000, parent: 23, effect: Effect.GlobalMul, value: 2, isEnd: true, world: 2, col: 3, row: 4 },
 ];
+
+/** Nodes belonging to a given world, in id order. */
+export function nodesForWorld(world: number): TreeNode[] {
+  return TREE.filter((n) => n.world === world);
+}
