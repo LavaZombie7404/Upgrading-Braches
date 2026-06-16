@@ -112,15 +112,15 @@ const WORLD1: TreeNode[] = [
 function makeWorld(worldId: number, start: number, parentGateId: number, last: boolean): TreeNode[] {
   const gatewayId = start + NODES_PER_WORLD - 1;
   const gateway: TreeNode = last
-    ? { id: gatewayId, name: 'Final Ascension', desc: 'Reach it to win.', cost: 15000, parent: start + 5, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: 3, row: 4 }
-    : { id: gatewayId, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost: 15000, parent: start + 5, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: 3, row: 4 };
+    ? { id: gatewayId, name: 'Final Ascension', desc: 'Reach it to win.', cost: 4000, parent: start + 5, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: 3, row: 4 }
+    : { id: gatewayId, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost: 4000, parent: start + 5, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: 3, row: 4 };
   return [
     { id: start + 0, name: 'Nexus', desc: 'A new realm. (Free)', cost: 0, parent: parentGateId, effect: Effect.ClickAdd, value: 1, world: worldId, col: 3, row: 0 },
     { id: start + 1, name: 'Quantum Clicks', desc: 'Every tap counts more.', cost: 20, parent: start + 0, effect: Effect.ClickAdd, value: 3, world: worldId, col: 1, row: 1 },
     { id: start + 2, name: 'Plasma Generator', desc: 'Passive flow.', cost: 40, parent: start + 0, effect: Effect.SecAdd, value: 2, world: worldId, col: 5, row: 1 },
     { id: start + 3, name: 'Time Warp', desc: 'Click power ×3.', cost: 120, parent: start + 1, effect: Effect.ClickMul, value: 3, world: worldId, col: 1, row: 2 },
     { id: start + 4, name: 'Antimatter', desc: 'Generators ×2.', cost: 200, parent: start + 2, effect: Effect.SecMul, value: 2, world: worldId, col: 5, row: 2 },
-    { id: start + 5, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 1500, parent: start + 4, effect: Effect.GlobalMul, value: 3, world: worldId, col: 3, row: 3 },
+    { id: start + 5, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 800, parent: start + 4, effect: Effect.GlobalMul, value: 3, world: worldId, col: 3, row: 3 },
     gateway,
   ];
 }
