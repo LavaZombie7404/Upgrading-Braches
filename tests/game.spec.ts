@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const SAVE_KEY = 'upgrade-tree.save.v1';
+const NUM_WORLDS = 7;
 
 interface WorldSave {
   points: number;
@@ -18,20 +19,24 @@ const hudValue = (page: Page, label: string) =>
 const node = (page: Page, name: string) =>
   page.locator('.node', { hasText: name });
 
+const worldOption = (page: Page, name: string) =>
+  page.locator('.world-select option', { hasText: name });
+
+const ZERO: WorldSave = { points: 0, totalEarned: 0 };
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+/** Build a SaveState; `balances` maps a 0-based world index to its balance. */
+const mkSave = (purchased: number[], balances: Record<number, WorldSave> = {}): SaveState => ({
+  purchased,
+  worlds: Array.from({ length: NUM_WORLDS }, (_, i) => balances[i] ?? ZERO),
+});
+
 /** Seed a save into localStorage before the app boots. */
 const seedSave = (page: Page, state: SaveState) =>
   page.addInitScript(
     ([key, json]) => localStorage.setItem(key, json),
     [SAVE_KEY, JSON.stringify(state)] as const
   );
-
-/** Build a SaveState with the given purchased nodes and per-world balances. */
-const save = (purchased: number[], w1: WorldSave, w2: WorldSave): SaveState => ({
-  purchased,
-  worlds: [w1, w2],
-});
-
-const ZERO: WorldSave = { points: 0, totalEarned: 0 };
 
 test.beforeEach(async ({ page }) => {
   // Start every test from a clean slate (no carried-over save).
@@ -46,6 +51,13 @@ test('boots with only the free root node revealed', async ({ page }) => {
   // Locked nodes are hidden — only the root "Awakening" shows at the start.
   await expect(page.locator('.node:visible')).toHaveCount(1);
   await expect(node(page, 'Awakening')).toBeVisible();
+});
+
+test('the world dropdown lists every world, locked until reached', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.world-select option')).toHaveCount(NUM_WORLDS);
+  await expect(worldOption(page, 'World 1')).toHaveJSProperty('disabled', false);
+  await expect(worldOption(page, 'World 7')).toHaveJSProperty('disabled', true);
 });
 
 test('clicking the button earns points', async ({ page }) => {
@@ -105,7 +117,7 @@ test('nodes behind an unmet prerequisite are hidden', async ({ page }) => {
 
 test('idle generators accrue points over time', async ({ page }) => {
   // Seed a save where the first auto-generator (+1/sec) is already owned.
-  await seedSave(page, save([0, 2], ZERO, ZERO));
+  await seedSave(page, mkSave([0, 2]));
   await page.goto('/');
 
   await expect(hudValue(page, 'Per second')).toHaveText('1');
@@ -115,28 +127,25 @@ test('idle generators accrue points over time', async ({ page }) => {
 
 test('World 2 is locked in the dropdown until its gateway is bought', async ({ page }) => {
   // All of World 1 except the gateway owned, with points to spare.
-  const purchased = Array.from({ length: 17 }, (_, i) => i); // nodes 0..16
-  await seedSave(page, save(purchased, { points: 300000, totalEarned: 300000 }, ZERO));
+  await seedSave(page, mkSave(range(17), { 0: { points: 300000, totalEarned: 300000 } }));
   await page.goto('/');
 
-  const world2Opt = page.locator('.world-select option', { hasText: 'World 2' });
-  await expect(world2Opt).toHaveJSProperty('disabled', true);
+  await expect(worldOption(page, 'World 2')).toHaveJSProperty('disabled', true);
 
-  // Buy the gateway node.
   const gate = node(page, 'Unlock World 2');
   await expect(gate).toHaveClass(/is-buyable/);
   await gate.click();
   await expect(gate).toHaveClass(/is-purchased/);
 
   // World 2 is now selectable, and a toast announces it.
-  await expect(world2Opt).toHaveJSProperty('disabled', false);
+  await expect(worldOption(page, 'World 2')).toHaveJSProperty('disabled', false);
   await expect(page.locator('.toast')).toContainText('World 2 unlocked');
 });
 
 test('each world keeps its own independent currency', async ({ page }) => {
   // World 2 already unlocked (gateway owned). World 1 has 500 banked, no
   // generators (so its balance is stable); World 2 starts at zero.
-  await seedSave(page, save([17], { points: 500, totalEarned: 500 }, ZERO));
+  await seedSave(page, mkSave([17], { 0: { points: 500, totalEarned: 500 } }));
   await page.goto('/');
 
   await expect(hudValue(page, 'Points')).toHaveText('500'); // World 1 currency
@@ -153,21 +162,39 @@ test('each world keeps its own independent currency', async ({ page }) => {
   await expect(hudValue(page, 'Points')).toHaveText('500');
 });
 
-test('selecting World 2 shows its tree, and the final node wins', async ({ page }) => {
-  // All of World 1 (incl. gateway) owned; World 2 funded for its fresh curve.
-  const purchased = Array.from({ length: 18 }, (_, i) => i); // nodes 0..17
-  await seedSave(page, save(purchased, ZERO, { points: 50000, totalEarned: 50000 }));
+test('completing a world unlocks the next one via its gateway', async ({ page }) => {
+  // All of World 1 (incl. gateway) owned; fund World 2 for its fresh curve.
+  await seedSave(page, mkSave(range(18), { 1: { points: 50000, totalEarned: 50000 } }));
   await page.goto('/');
 
   await page.locator('.world-select').selectOption('2');
   await expect(node(page, 'Nexus')).toBeVisible();
+  await expect(worldOption(page, 'World 3')).toHaveJSProperty('disabled', true);
 
-  // Buy the path to the final node (spending World 2 currency).
-  for (const name of ['Nexus', 'Plasma Generator', 'Antimatter', 'Cosmic Synergy', 'Final Ascension']) {
+  // Buy the path to World 2's gateway (spending World 2 currency).
+  for (const name of ['Nexus', 'Plasma Generator', 'Antimatter', 'Cosmic Synergy', 'Unlock World 3']) {
     const nd = node(page, name);
     await expect(nd).toHaveClass(/is-buyable/);
     await nd.click();
   }
+
+  await expect(worldOption(page, 'World 3')).toHaveJSProperty('disabled', false);
+  await expect(page.locator('.toast')).toContainText('World 3 unlocked');
+});
+
+test('buying the final node in the last world wins the game', async ({ page }) => {
+  // Everything owned except the very last node; fund the last world.
+  const lastWorldIndex = NUM_WORLDS - 1;
+  const totalNodes = 18 + (NUM_WORLDS - 1) * 7; // World 1 (18) + 7 per generated world
+  await seedSave(page, mkSave(range(totalNodes - 1), {
+    [lastWorldIndex]: { points: 50000, totalEarned: 50000 },
+  }));
+  await page.goto('/');
+
+  await page.locator('.world-select').selectOption(String(NUM_WORLDS));
+  const finalNode = node(page, 'Final Ascension');
+  await expect(finalNode).toHaveClass(/is-buyable/);
+  await finalNode.click();
 
   await expect(page.locator('.win-overlay')).toBeVisible();
   await expect(page.locator('.win-overlay__card')).toContainText('conquered every world');
