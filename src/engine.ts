@@ -12,6 +12,7 @@ interface EngineExports {
   reset(n: number, worlds: number): void;
   setNode(id: number, cost: number, parent: number, eType: number, eValue: number, world: number, end: number): void;
   finalize(): void;
+  setGlobalMul(g: number): void;
   tick(dt: number): void;
   click(w: number): void;
   buy(id: number): number;
@@ -57,13 +58,19 @@ export class Engine {
     return engine;
   }
 
-  /** Push the tree topology from treeData.ts into the engine. */
-  private loadTree(): void {
+  /** Push the current tree topology (treeData.ts) into the engine. Call after
+   *  rebuildGame() changes the world count. */
+  loadTree(): void {
     this.ex.reset(TREE.length, WORLDS.length);
     for (const n of TREE) {
       this.ex.setNode(n.id, n.cost, n.parent, n.effect, n.value, worldIndex(n.world), n.isEnd ? 1 : 0);
     }
     this.ex.finalize();
+  }
+
+  /** Set the rebirth multiplier applied to every world's output. */
+  setGlobalMul(g: number): void {
+    this.ex.setGlobalMul(g);
   }
 
   // --- Simulation (world is a 0-based index) ---
@@ -110,8 +117,8 @@ export class Engine {
   }
 
   // --- Save / restore ---
-  /** Serialise the minimal state needed to reconstruct the run. */
-  serialize(): SaveState {
+  /** Serialise the minimal engine state (purchases + per-world balances). */
+  serialize(): GameState {
     const purchased: number[] = [];
     for (const n of TREE) {
       if (this.isPurchased(n.id)) purchased.push(n.id);
@@ -123,20 +130,22 @@ export class Engine {
     return { purchased, worlds };
   }
 
-  /** Restore from a saved state (resets the tree first). */
-  restore(state: SaveState): void {
-    this.loadTree(); // clean slate
-    for (const id of state.purchased) this.ex.setPurchased(id);
+  /** Restore from a saved state (rebuilds the engine tree first). Robust to a
+   *  world count that has since grown via rebirths: extra worlds start at zero
+   *  and ids no longer present are ignored. */
+  restore(state: GameState): void {
+    this.loadTree(); // clean slate for the CURRENT tree
+    const nodeCount = TREE.length;
+    for (const id of state.purchased) {
+      if (id >= 0 && id < nodeCount) this.ex.setPurchased(id);
+    }
     this.ex.finalize(); // recompute rates from restored purchases
     state.worlds.forEach((ws, w) => {
-      this.ex.setPoints(w, ws.points);
-      this.ex.setTotalEarned(w, ws.totalEarned);
+      if (w < WORLDS.length) {
+        this.ex.setPoints(w, ws.points);
+        this.ex.setTotalEarned(w, ws.totalEarned);
+      }
     });
-  }
-
-  /** Wipe all progress. */
-  hardReset(): void {
-    this.loadTree();
   }
 }
 
@@ -145,7 +154,13 @@ export interface WorldSave {
   totalEarned: number;
 }
 
-export interface SaveState {
+/** Engine-owned state (purchases + per-world balances). */
+export interface GameState {
   purchased: number[];
   worlds: WorldSave[];
+}
+
+/** Full persisted save: engine state plus the host-owned rebirth count. */
+export interface SaveState extends GameState {
+  rebirths: number;
 }

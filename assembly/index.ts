@@ -40,6 +40,7 @@ let points: Float64Array = new Float64Array(0);
 let totalEarned: Float64Array = new Float64Array(0);
 let perClick: Float64Array = new Float64Array(0);
 let perSec: Float64Array = new Float64Array(0);
+let globalMul: f64 = 1; // rebirth multiplier applied to every world's output
 let won: bool = false;
 
 // --- Setup ------------------------------------------------------------------
@@ -59,7 +60,14 @@ export function reset(n: i32, worlds: i32): void {
   totalEarned = new Float64Array(worlds);
   perClick = new Float64Array(worlds);
   perSec = new Float64Array(worlds);
+  globalMul = 1;
   won = false;
+  recomputeAll();
+}
+
+/** Set the rebirth multiplier applied to every world's per-click and per-sec. */
+export function setGlobalMul(g: f64): void {
+  globalMul = g;
   recomputeAll();
 }
 
@@ -87,7 +95,7 @@ function recompute(w: i32): void {
   let clickMul: f64 = 1;
   let secAdd: f64 = 0;
   let secMul: f64 = 1;
-  let globalMul: f64 = 1;
+  let worldGlobal: f64 = 1; // product of this world's GlobalMul nodes
 
   for (let i = 0; i < nodeCount; i++) {
     if (purchased[i] == 0) continue;
@@ -98,12 +106,13 @@ function recompute(w: i32): void {
     else if (t == EFF_CLICK_MUL) clickMul *= v;
     else if (t == EFF_SEC_ADD) secAdd += v;
     else if (t == EFF_SEC_MUL) secMul *= v;
-    else if (t == EFF_GLOBAL_MUL) globalMul *= v;
+    else if (t == EFF_GLOBAL_MUL) worldGlobal *= v;
   }
 
-  // Base manual click is always worth 1 before bonuses.
-  perClick[w] = (1.0 + clickAdd) * clickMul * globalMul;
-  perSec[w] = secAdd * secMul * globalMul;
+  // Base manual click is always worth 1 before bonuses. The rebirth multiplier
+  // (globalMul) scales every world's output.
+  perClick[w] = (1.0 + clickAdd) * clickMul * worldGlobal * globalMul;
+  perSec[w] = secAdd * secMul * worldGlobal * globalMul;
 }
 
 function recomputeAll(): void {

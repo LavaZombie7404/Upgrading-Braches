@@ -2,10 +2,11 @@
 //
 // Nodes are positioned <button> elements; edges are SVG lines on a layer behind
 // them. The renderer reads all live state from the engine each refresh — it owns
-// no game state of its own beyond which world is currently being viewed.
+// no game state of its own beyond which world is currently being viewed and the
+// rebirth count (used for HUD display).
 
 import { Engine } from './engine';
-import { TREE, WORLDS, nodesForWorld, worldIndex, effectText, type TreeNode } from './treeData';
+import { TREE, WORLDS, nodesForWorld, worldIndex, rebirthMultiplier, effectText, type TreeNode } from './treeData';
 import { formatNumber } from './format';
 
 // Layout constants (px).
@@ -20,8 +21,6 @@ const nodeY = (n: TreeNode) => PAD + n.row * ROW_H;
 const centerX = (n: TreeNode) => nodeX(n) + NODE_W / 2;
 const centerY = (n: TreeNode) => nodeY(n) + NODE_H / 2;
 
-const nodeById = new Map(TREE.map((n) => [n.id, n]));
-
 export interface UIHandlers {
   onClickButton(): void;
   onBuy(id: number): void;
@@ -31,14 +30,16 @@ export interface UIHandlers {
 export class GameUI {
   private readonly engine: Engine;
   private readonly handlers: UIHandlers;
+  private root!: HTMLElement;
+  private rebirths: number;
 
   private elPoints!: HTMLElement;
   private elPointsLabel!: HTMLElement;
   private elPerSec!: HTMLElement;
   private elPerClick!: HTMLElement;
+  private elRebirths!: HTMLElement;
   private worldSelect!: HTMLSelectElement;
   private boardEl!: HTMLElement;
-
   private toastLayer!: HTMLElement;
 
   private currentWorld = WORLDS[0].id;
@@ -46,11 +47,11 @@ export class GameUI {
   private readonly edgeEls = new Map<number, SVGLineElement>();
   /** Worlds whose unlock we've already announced (so we toast each once). */
   private readonly announced = new Set<number>();
-  private winShown = false;
 
-  constructor(root: HTMLElement, engine: Engine, handlers: UIHandlers) {
+  constructor(root: HTMLElement, engine: Engine, rebirths: number, handlers: UIHandlers) {
     this.engine = engine;
     this.handlers = handlers;
+    this.rebirths = rebirths;
     this.build(root);
     this.seedAnnouncements();
   }
@@ -75,12 +76,12 @@ export class GameUI {
   }
 
   private build(root: HTMLElement): void {
+    this.root = root;
     root.innerHTML = '';
 
     // --- HUD ---
     const hud = el('header', 'hud');
-    // The points stat is labelled with the active world's currency name; keep a
-    // ref to its label so refresh() can update it on world switch.
+    // The points stat is labelled with the active world's currency name.
     const pointsStat = el('div', 'hud__stat hud__stat--points');
     this.elPointsLabel = el('span', 'hud__label');
     this.elPoints = el('span', 'hud__value');
@@ -88,8 +89,10 @@ export class GameUI {
     hud.append(
       pointsStat,
       stat('Per second', (this.elPerSec = el('span', 'hud__value'))),
-      stat('Per click', (this.elPerClick = el('span', 'hud__value')))
+      stat('Per click', (this.elPerClick = el('span', 'hud__value'))),
+      stat('Rebirths', (this.elRebirths = el('span', 'hud__value hud__value--rebirth')))
     );
+    this.elRebirths.textContent = this.rebirthLabel();
 
     // World picker.
     const worldWrap = el('div', 'world-picker');
@@ -118,15 +121,10 @@ export class GameUI {
     const resetBtn = el('button', 'reset-btn') as HTMLButtonElement;
     resetBtn.type = 'button';
     resetBtn.textContent = 'Reset';
-    resetBtn.title = 'Wipe all progress';
+    resetBtn.title = 'Wipe all progress (including rebirths)';
     resetBtn.addEventListener('click', () => {
-      if (confirm('Reset all progress? This cannot be undone.')) {
+      if (confirm('Reset all progress, including rebirths? This cannot be undone.')) {
         this.handlers.onHardReset();
-        this.currentWorld = WORLDS[0].id;
-        this.worldSelect.value = String(WORLDS[0].id);
-        this.seedAnnouncements();
-        this.buildBoard(this.currentWorld);
-        this.refresh();
       }
     });
     hud.append(resetBtn);
@@ -139,12 +137,6 @@ export class GameUI {
     viewport.append(this.boardEl);
     root.append(viewport);
 
-    // --- Win overlay (hidden until won) ---
-    const overlay = el('div', 'win-overlay');
-    overlay.id = 'win-overlay';
-    overlay.hidden = true;
-    root.append(overlay);
-
     // --- Toast layer (transient notifications) ---
     this.toastLayer = el('div', 'toast-layer');
     root.append(this.toastLayer);
@@ -152,12 +144,31 @@ export class GameUI {
     this.buildBoard(this.currentWorld);
   }
 
+  private rebirthLabel(): string {
+    return this.rebirths > 0 ? `${this.rebirths} (×${rebirthMultiplier(this.rebirths)})` : '0';
+  }
+
+  /** Rebuild the whole UI for a (possibly changed) world count after a rebirth
+   *  or hard reset. Returns the view to World 1 and celebrates a rebirth. */
+  rebuild(rebirths: number): void {
+    const gained = rebirths > this.rebirths;
+    this.rebirths = rebirths;
+    this.currentWorld = WORLDS[0].id;
+    this.build(this.root);
+    this.seedAnnouncements();
+    this.refresh();
+    if (gained) {
+      this.showToast(
+        `✦ Rebirth #${rebirths}! ×${rebirthMultiplier(rebirths)} to all output — World ${WORLDS.length} unlocked! ✦`
+      );
+    }
+  }
+
   /** Show a transient toast notification. */
   private showToast(message: string): void {
     const toast = el('div', 'toast');
     toast.textContent = message;
     this.toastLayer.append(toast);
-    // Remove after the fade-out animation completes (~3.2s, see SCSS).
     setTimeout(() => toast.remove(), 3200);
   }
 
@@ -168,6 +179,7 @@ export class GameUI {
     this.edgeEls.clear();
 
     const nodes = nodesForWorld(worldId);
+    const byId = new Map(TREE.map((n) => [n.id, n])); // rebuilt fresh (tree can change)
     const maxCol = Math.max(...nodes.map((n) => n.col));
     const maxRow = Math.max(...nodes.map((n) => n.row));
     const boardW = maxCol * COL_W + NODE_W + PAD * 2;
@@ -181,9 +193,9 @@ export class GameUI {
     svg.setAttribute('width', String(boardW));
     svg.setAttribute('height', String(boardH));
     for (const n of nodes) {
-      const parent = nodeById.get(n.parent);
-      // Only draw edges within this world (the world entry node's parent lives
-      // in the previous world and has no edge here).
+      const parent = byId.get(n.parent);
+      // Only draw edges within this world (a world entry node's parent lives in
+      // the previous world and has no edge here).
       if (!parent || parent.world !== worldId) continue;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', String(centerX(parent)));
@@ -204,7 +216,8 @@ export class GameUI {
       btn.style.top = `${nodeY(n)}px`;
       btn.style.width = `${NODE_W}px`;
       btn.style.height = `${NODE_H}px`;
-      if (n.isEnd || n.unlocksWorld) btn.classList.add('node--end');
+      if (n.isEnd || n.unlocksWorld || n.isRebirth) btn.classList.add('node--end');
+      if (n.isRebirth) btn.classList.add('node--rebirth');
 
       const name = el('span', 'node__name');
       name.textContent = n.name;
@@ -276,26 +289,6 @@ export class GameUI {
         setClass(edge, 'edge--hidden', !visible); // hide edges into hidden nodes
       }
     }
-  }
-
-  /** Show the victory overlay (idempotent). */
-  showWin(): void {
-    if (this.winShown) return;
-    this.winShown = true;
-    const overlay = document.getElementById('win-overlay')!;
-    overlay.hidden = false;
-    overlay.innerHTML = '';
-    const card = el('div', 'win-overlay__card');
-    const h = el('h2');
-    h.textContent = 'You conquered every world! 🎉';
-    const p = el('p');
-    p.textContent = `Total lifetime output across all worlds: ${formatNumber(this.engine.totalEarnedAll())}`;
-    const close = el('button', 'win-overlay__close') as HTMLButtonElement;
-    close.type = 'button';
-    close.textContent = 'Keep playing';
-    close.addEventListener('click', () => (overlay.hidden = true));
-    card.append(h, p, close);
-    overlay.append(card);
   }
 }
 

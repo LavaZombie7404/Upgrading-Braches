@@ -10,6 +10,7 @@ export function loadSave(): SaveState | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as SaveState;
     if (!Array.isArray(data.purchased) || !Array.isArray(data.worlds)) return null;
+    if (typeof data.rebirths !== 'number' || data.rebirths < 0) data.rebirths = 0;
     return data;
   } catch {
     return null;

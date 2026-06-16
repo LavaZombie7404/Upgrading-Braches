@@ -1,32 +1,54 @@
-// Entry point: wire the WASM engine, UI, game loop, and persistence together.
+// Entry point: wire the WASM engine, UI, game loop, persistence, and rebirths.
 
 import './styles/main.scss';
 import { Engine } from './engine';
 import { GameUI } from './render';
 import { loadSave, writeSave, clearSave } from './save';
+import { TREE, rebuildGame, rebirthMultiplier } from './treeData';
 
 async function start(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) throw new Error('#app not found');
 
-  const engine = await Engine.load();
-
-  // Restore a previous run, if any.
   const saved = loadSave();
-  if (saved) engine.restore(saved);
+  let rebirths = saved?.rebirths ?? 0;
 
-  const ui = new GameUI(root, engine, {
+  // Build the tree for the saved rebirth count BEFORE the engine loads it.
+  rebuildGame(rebirths);
+  const engine = await Engine.load();
+  if (saved) engine.restore(saved);
+  engine.setGlobalMul(rebirthMultiplier(rebirths));
+
+  const save = () => writeSave({ ...engine.serialize(), rebirths });
+
+  const ui = new GameUI(root, engine, rebirths, {
     onClickButton: () => engine.click(ui.activeWorldIndex),
     onBuy: (id) => {
-      if (engine.buy(id)) save(); // persist immediately on a purchase
+      if (!engine.buy(id)) return;
+      if (TREE[id]?.isRebirth) doRebirth();
+      else save();
     },
     onHardReset: () => {
-      engine.hardReset();
+      rebirths = 0;
+      rebuildGame(0);
+      engine.loadTree();
+      engine.setGlobalMul(rebirthMultiplier(0));
       clearSave();
+      ui.rebuild(0);
     },
   });
 
-  const save = () => writeSave(engine.serialize());
+  // Beating the last world: +1 rebirth, +1 world, bigger global multiplier.
+  // Progress carries over — the new world is reachable via the node just bought.
+  function doRebirth(): void {
+    const snapshot = engine.serialize();
+    rebirths += 1;
+    rebuildGame(rebirths);
+    engine.restore(snapshot);
+    engine.setGlobalMul(rebirthMultiplier(rebirths));
+    save();
+    ui.rebuild(rebirths);
+  }
 
   // Spacebar earns points too — one per press, in the active world. Ignoring
   // auto-repeat keydowns means holding Space does nothing extra; preventDefault
@@ -49,8 +71,6 @@ async function start(): Promise<void> {
 
     engine.tick(dt);
     ui.refresh();
-
-    if (engine.won) ui.showWin();
 
     sinceSave += dt;
     if (sinceSave >= 5) {

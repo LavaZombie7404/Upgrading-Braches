@@ -32,6 +32,8 @@ export interface TreeNode {
   value: number;
   /** Buying an `isEnd` node wins the game. */
   isEnd?: boolean;
+  /** Buying an `isRebirth` node grants a rebirth (the last world's final node). */
+  isRebirth?: boolean;
   /** If set, buying this node unlocks the given world in the dropdown. */
   unlocksWorld?: number;
   /** Which world this node belongs to (for the dropdown + rendering). */
@@ -55,6 +57,7 @@ export const TOTAL_WORLDS = 7;
 
 // A short, human-readable summary of a node's effect (used in labels/tooltips).
 export function effectText(n: TreeNode): string {
+  if (n.isRebirth) return '★ Rebirth ★';
   if (n.unlocksWorld) return `Unlocks World ${n.unlocksWorld}`;
   switch (n.effect) {
     case Effect.ClickAdd:
@@ -290,7 +293,7 @@ const BLUEPRINTS: WorldBlueprint[] = [
 // last blueprint node into the gateway ("Unlock World N+1") or victory node.
 function makeWorld(worldId: number, start: number, parentGateId: number, last: boolean): TreeNode[] {
   const f = Math.pow(WORLD_SCALE, worldId - 2); // 1, 5, 25, ... for worlds 2, 3, 4, ...
-  const bp = BLUEPRINTS[worldId - 2];
+  const bp = blueprintFor(worldId);
   const coreLen = bp.nodes.length;
 
   return bp.nodes.map((spec, i) => {
@@ -298,8 +301,10 @@ function makeWorld(worldId: number, start: number, parentGateId: number, last: b
     const parent = spec.parent < 0 ? parentGateId : start + spec.parent;
     const cost = spec.cost * f;
     if (i === coreLen - 1) {
+      // The LAST world's final node grants a rebirth; every other world's
+      // final node unlocks the next world.
       return last
-        ? { id, name: 'Final Ascension', desc: 'Reach it to win.', cost, parent, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: spec.col, row: spec.row }
+        ? { id, name: 'Rebirth', desc: 'Beat the game: gain a rebirth (+1 world, ×rebirths to all output).', cost, parent, effect: Effect.GlobalMul, value: 1, isRebirth: true, world: worldId, col: spec.col, row: spec.row }
         : { id, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost, parent, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: spec.col, row: spec.row };
     }
     // Flat income scales with the world; multipliers are ratios and don't.
@@ -308,22 +313,46 @@ function makeWorld(worldId: number, start: number, parentGateId: number, last: b
   });
 }
 
-export const TREE: TreeNode[] = [...WORLD1];
-export const WORLDS: World[] = [{ id: 1, name: 'World 1', currency: 'Points', unlockNodeId: null }];
+// Worlds beyond the 6 hand-authored blueprints (i.e. extra worlds gained from
+// rebirths) cycle through the blueprints again.
+function blueprintFor(worldId: number): WorldBlueprint {
+  return BLUEPRINTS[(worldId - 2) % BLUEPRINTS.length];
+}
 
-// Build worlds 2..TOTAL_WORLDS, chaining each to the previous world's gateway.
-{
-  let prevGateway = 17; // World 1's "Unlock World 2" node
+// TREE and WORLDS are rebuilt whenever the rebirth count changes (rebirths add
+// worlds), so they're mutable live bindings rather than consts.
+export let TREE: TreeNode[] = [];
+export let WORLDS: World[] = [];
+
+/** Global output multiplier granted by rebirths (3 rebirths → ×3, etc.). */
+export function rebirthMultiplier(rebirths: number): number {
+  return Math.max(1, rebirths);
+}
+
+/** (Re)build the whole game for a rebirth count: TOTAL_WORLDS + rebirths worlds,
+ *  the last of which ends in a Rebirth node. Updates the exported TREE/WORLDS. */
+export function rebuildGame(rebirths: number): void {
+  const totalWorlds = TOTAL_WORLDS + rebirths;
+  const tree: TreeNode[] = [...WORLD1];
+  const worlds: World[] = [{ id: 1, name: 'World 1', currency: 'Points', unlockNodeId: null }];
+
+  let prevGateway = 17; // World 1's gateway node
   let nextId = WORLD1.length;
-  for (let w = 2; w <= TOTAL_WORLDS; w++) {
-    const bp = BLUEPRINTS[w - 2];
-    WORLDS.push({ id: w, name: `World ${w}`, currency: bp.currency, unlockNodeId: prevGateway });
-    const nodes = makeWorld(w, nextId, prevGateway, w === TOTAL_WORLDS);
-    TREE.push(...nodes);
+  for (let w = 2; w <= totalWorlds; w++) {
+    const bp = blueprintFor(w);
+    worlds.push({ id: w, name: `World ${w}`, currency: bp.currency, unlockNodeId: prevGateway });
+    const nodes = makeWorld(w, nextId, prevGateway, w === totalWorlds);
+    tree.push(...nodes);
     prevGateway = nextId + bp.nodes.length - 1; // gateway = the world's last node
     nextId += nodes.length;
   }
+
+  TREE = tree;
+  WORLDS = worlds;
 }
+
+// Populate the default (no-rebirth) game at import time.
+rebuildGame(0);
 
 /** Nodes belonging to a given world, in id order. */
 export function nodesForWorld(world: number): TreeNode[] {

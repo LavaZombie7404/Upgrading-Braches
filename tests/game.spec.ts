@@ -11,6 +11,7 @@ interface WorldSave {
 interface SaveState {
   purchased: number[];
   worlds: WorldSave[];
+  rebirths: number;
 }
 
 // Helpers ---------------------------------------------------------------------
@@ -31,9 +32,10 @@ const ZERO: WorldSave = { points: 0, totalEarned: 0 };
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 /** Build a SaveState; `balances` maps a 0-based world index to its balance. */
-const mkSave = (purchased: number[], balances: Record<number, WorldSave> = {}): SaveState => ({
+const mkSave = (purchased: number[], balances: Record<number, WorldSave> = {}, rebirths = 0): SaveState => ({
   purchased,
   worlds: Array.from({ length: NUM_WORLDS }, (_, i) => balances[i] ?? ZERO),
+  rebirths,
 });
 
 /** Seed a save into localStorage before the app boots. */
@@ -204,20 +206,36 @@ test('the bonus tree reveals after Unlock World 2 and pays out big', async ({ pa
   await expect(hudValue(page, 'Per click')).toHaveText('10.00K');
 });
 
-test('buying the final node in the last world wins the game', async ({ page }) => {
-  // Own everything except the last world's final node; fund that world exactly.
-  const finalSpec = TREE.find((n) => n.isEnd)!;
+test('rebirths grant a global multiplier and extra worlds', async ({ page }) => {
+  // Start with 2 rebirths banked (no purchases needed).
+  await seedSave(page, mkSave([], {}, 2));
+  await page.goto('/');
+
+  // Base per-click is ×2 (the rebirth multiplier), and the HUD shows the count.
+  await expect(hudValue(page, 'Per click')).toHaveText('2');
+  await expect(hudValue(page, 'Rebirths')).toContainText('2');
+  // 7 base worlds + 2 from rebirths = 9.
+  await expect(page.locator('.world-select option')).toHaveCount(9);
+});
+
+test('beating the last world grants a rebirth and adds a world', async ({ page }) => {
+  // Own everything except the last world's Rebirth node; fund that world exactly.
+  const rebirthSpec = TREE.find((n) => n.isRebirth)!;
   await seedSave(page, mkSave(
-    TREE.filter((n) => !n.isEnd).map((n) => n.id),
-    { [NUM_WORLDS - 1]: { points: finalSpec.cost, totalEarned: finalSpec.cost } }
+    TREE.filter((n) => !n.isRebirth).map((n) => n.id),
+    { [NUM_WORLDS - 1]: { points: rebirthSpec.cost, totalEarned: rebirthSpec.cost } }
   ));
   await page.goto('/');
 
-  await page.locator('.world-select').selectOption(String(NUM_WORLDS));
-  const finalNode = node(page, 'Final Ascension');
-  await expect(finalNode).toHaveClass(/is-buyable/);
-  await finalNode.click();
+  await expect(page.locator('.world-select option')).toHaveCount(7); // 0 rebirths
 
-  await expect(page.locator('.win-overlay')).toBeVisible();
-  await expect(page.locator('.win-overlay__card')).toContainText('conquered every world');
+  await page.locator('.world-select').selectOption(String(NUM_WORLDS));
+  const rebirth = node(page, 'Rebirth');
+  await expect(rebirth).toHaveClass(/is-buyable/);
+  await rebirth.click();
+
+  // Gained a rebirth: HUD count goes up, a new (8th) world appears, toast fires.
+  await expect(hudValue(page, 'Rebirths')).toContainText('1');
+  await expect(page.locator('.world-select option')).toHaveCount(8);
+  await expect(page.locator('.toast')).toContainText('Rebirth');
 });

@@ -106,6 +106,27 @@
     }
   }
 
+  // The rebirth node — beating the last world.
+  &--rebirth {
+    border-color: v.$gold;
+
+    .node__name {
+      color: v.$gold;
+    }
+    .node__effect {
+      color: v.$gold;
+      font-weight: 700;
+    }
+    &.is-buyable {
+      box-shadow: 0 0 0 1px v.$gold, 0 0 26px rgba(v.$gold, 0.7);
+      border-color: v.$gold;
+    }
+    &.is-purchased {
+      border-color: v.$gold;
+      background: rgba(v.$gold, 0.18);
+    }
+  }
+
   // The goal node.
   &--end {
     border-style: dashed;

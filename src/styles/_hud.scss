@@ -38,6 +38,10 @@
   &__stat:first-child .hud__value {
     font-size: 1.6rem;
   }
+
+  &__value--rebirth {
+    color: v.$accent-2;
+  }
 }
 
 .world-picker {
