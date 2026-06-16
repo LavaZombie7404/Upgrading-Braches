@@ -8,6 +8,11 @@ src/wasm/engine.wat
 src/wasm/engine.js
 src/wasm/engine.d.ts
 
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Editor / OS
 .DS_Store
 *.log

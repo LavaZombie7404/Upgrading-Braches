@@ -40,6 +40,17 @@ npm run build    # WASM + typecheck + production bundle into dist/
 npm run preview  # serve the production build locally
 ```
 
+## Test
+
+End-to-end tests drive the real built game in a headless browser with
+[Playwright](https://playwright.dev) — they cover WASM boot, clicking/earning,
+purchasing and effects, prerequisite locking, idle generation, and the win flow.
+
+```bash
+npx playwright install --with-deps chromium   # one-time browser setup
+npm test                                       # builds, then runs tests/*.spec.ts
+```
+
 ## Deploy
 
 Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds and
