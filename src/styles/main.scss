@@ -1,0 +1,26 @@
+@use 'variables' as v;
+@use 'hud';
+@use 'board';
+@use 'overlay';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: v.$font;
+  color: v.$text;
+  background: v.$bg;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}

@@ -1,0 +1,29 @@
+// Design tokens for the upgrade-tree UI.
+
+// Palette
+$bg: #0e1117;
+$bg-panel: #161b22;
+$bg-elev: #1d2430;
+$border: #2b3340;
+$text: #e6edf3;
+$text-dim: #8b98a8;
+
+$accent: #4ea1ff; // buyable / active
+$accent-2: #7c5cff; // end node / special
+$gold: #ffcc4d; // points
+$green: #3fb950; // owned
+$danger: #f85149;
+
+// Node state colors
+$node-locked: #1a1f29;
+$node-unlocked: #232c3a; // prereq met, can't afford
+$node-buyable: rgba($accent, 0.18);
+$node-owned: rgba($green, 0.16);
+
+// Shape
+$radius: 10px;
+$radius-sm: 6px;
+
+// Type
+$font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+$mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;

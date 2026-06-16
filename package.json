@@ -1,0 +1,22 @@
+{
+  "name": "upgrade-tree",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An incremental upgrade-tree game. Engine in AssemblyScript (WASM), UI in vanilla TypeScript + SCSS.",
+  "scripts": {
+    "asbuild:debug": "asc assembly/index.ts --target debug",
+    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild": "npm run asbuild:release",
+    "dev": "npm run asbuild && vite",
+    "build": "npm run asbuild && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.31",
+    "sass": "^1.77.8",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  }
+}

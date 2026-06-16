@@ -1,0 +1,127 @@
+@use 'variables' as v;
+
+.board-viewport {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+
+  // Subtle dotted backdrop so the tree reads as a "board".
+  background-image: radial-gradient(circle, rgba(v.$border, 0.6) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.board {
+  position: relative;
+  margin: 0 auto;
+}
+
+// --- Edges (SVG) ---
+.edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.edge {
+  stroke: v.$border;
+  stroke-width: 3;
+  transition: stroke 0.2s ease;
+
+  &--active {
+    stroke: v.$green;
+  }
+}
+
+// --- Nodes ---
+.node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  text-align: center;
+  font-family: v.$font;
+  color: v.$text;
+  background: v.$node-unlocked;
+  border: 1px solid v.$border;
+  border-radius: v.$radius;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease,
+    border-color 0.2s ease, opacity 0.2s ease;
+
+  &__name {
+    font-weight: 700;
+    font-size: 0.82rem;
+    line-height: 1.1;
+  }
+  &__effect {
+    font-size: 0.68rem;
+    color: v.$text-dim;
+  }
+  &__cost {
+    font-family: v.$mono;
+    font-size: 0.72rem;
+    color: v.$gold;
+  }
+
+  // --- States ---
+  &.is-locked {
+    background: v.$node-locked;
+    color: v.$text-dim;
+    opacity: 0.5;
+    cursor: not-allowed;
+
+    .node__cost {
+      color: v.$text-dim;
+    }
+  }
+
+  &.is-unlocked {
+    border-color: v.$border;
+    // Prereq met but unaffordable: faint pulse hint.
+    .node__cost {
+      color: v.$danger;
+    }
+  }
+
+  &.is-buyable {
+    background: v.$node-buyable;
+    border-color: v.$accent;
+    box-shadow: 0 0 0 1px v.$accent, 0 0 16px rgba(v.$accent, 0.4);
+    cursor: pointer;
+
+    &:hover {
+      transform: scale(1.04);
+    }
+  }
+
+  &.is-purchased {
+    background: v.$node-owned;
+    border-color: v.$green;
+    cursor: default;
+
+    .node__cost {
+      color: v.$green;
+    }
+  }
+
+  // The goal node.
+  &--end {
+    border-style: dashed;
+    border-color: v.$accent-2;
+
+    .node__name {
+      color: v.$accent-2;
+    }
+    &.is-buyable {
+      box-shadow: 0 0 0 1px v.$accent-2, 0 0 24px rgba(v.$accent-2, 0.6);
+      border-color: v.$accent-2;
+    }
+    &.is-purchased {
+      border-color: v.$accent-2;
+      background: rgba(v.$accent-2, 0.2);
+    }
+  }
+}

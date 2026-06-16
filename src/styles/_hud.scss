@@ -1,0 +1,78 @@
+@use 'sass:color';
+@use 'variables' as v;
+
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.25rem;
+  background: v.$bg-panel;
+  border-bottom: 1px solid v.$border;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+
+  &__stat {
+    display: flex;
+    flex-direction: column;
+    min-width: 88px;
+  }
+
+  &__label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: v.$text-dim;
+  }
+
+  &__value {
+    font-family: v.$mono;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: v.$gold;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // First stat (Points) pops the most.
+  &__stat:first-child .hud__value {
+    font-size: 1.6rem;
+  }
+}
+
+.click-btn {
+  margin-left: auto;
+  padding: 0.7rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #06121f;
+  background: linear-gradient(180deg, color.adjust(v.$accent, $lightness: 8%), v.$accent);
+  border: none;
+  border-radius: v.$radius;
+  cursor: pointer;
+  box-shadow: 0 2px 0 color.adjust(v.$accent, $lightness: -18%);
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+  &:active {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 color.adjust(v.$accent, $lightness: -18%);
+  }
+}
+
+.reset-btn {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  color: v.$text-dim;
+  background: transparent;
+  border: 1px solid v.$border;
+  border-radius: v.$radius-sm;
+  cursor: pointer;
+
+  &:hover {
+    color: v.$danger;
+    border-color: v.$danger;
+  }
+}
