@@ -238,4 +238,8 @@ test('beating the last world grants a rebirth and adds a world', async ({ page }
   await expect(hudValue(page, 'Rebirths')).toContainText('1');
   await expect(page.locator('.world-select option')).toHaveCount(8);
   await expect(page.locator('.toast')).toContainText('Rebirth');
+
+  // ...and progress is RESET: back on World 1 at zero, World 2 locked again.
+  await expect(pointsValue(page)).toHaveText('0');
+  await expect(worldOption(page, 'World 2')).toHaveJSProperty('disabled', true);
 });

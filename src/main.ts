@@ -38,13 +38,14 @@ async function start(): Promise<void> {
     },
   });
 
-  // Beating the last world: +1 rebirth, +1 world, bigger global multiplier.
-  // Progress carries over — the new world is reachable via the node just bought.
+  // Beating the last world: +1 rebirth and +1 world, with a bigger global
+  // multiplier. Everything else RESETS — purchases and all currencies are wiped
+  // (classic prestige) — so you replay from World 1, faster, toward one more
+  // world. Only the rebirth count (and thus the multiplier) is kept.
   function doRebirth(): void {
-    const snapshot = engine.serialize();
     rebirths += 1;
     rebuildGame(rebirths);
-    engine.restore(snapshot);
+    engine.loadTree(); // fresh tree: nothing purchased, all currencies at zero
     engine.setGlobalMul(rebirthMultiplier(rebirths));
     save();
     ui.rebuild(rebirths);
