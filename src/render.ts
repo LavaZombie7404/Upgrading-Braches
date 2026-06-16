@@ -149,17 +149,23 @@ export class GameUI {
       const buyable = !purchased && this.engine.isBuyable(n.id);
       const unlocked = !purchased && this.engine.isUnlocked(n.id);
 
+      // Locked nodes (prerequisite not yet met) stay hidden until revealed.
+      const visible = purchased || unlocked;
+      btn.hidden = !visible;
+
       setClass(btn, 'is-purchased', purchased);
       setClass(btn, 'is-buyable', buyable);
       setClass(btn, 'is-unlocked', unlocked && !buyable); // unlocked but can't afford
-      setClass(btn, 'is-locked', !purchased && !unlocked);
       btn.disabled = !buyable;
 
       const cost = (btn as HTMLButtonElement & { _cost?: HTMLElement })._cost!;
-      cost.textContent = purchased ? 'owned' : formatNumber(n.cost);
+      cost.textContent = purchased ? 'owned' : n.cost === 0 ? 'free' : formatNumber(n.cost);
 
       const edge = this.edgeEls.get(n.id);
-      if (edge) setClass(edge, 'edge--active', purchased);
+      if (edge) {
+        setClass(edge, 'edge--active', purchased);
+        setClass(edge, 'edge--hidden', !visible); // hide edges into hidden nodes
+      }
     }
   }
 

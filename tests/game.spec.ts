@@ -14,40 +14,51 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript((key) => localStorage.removeItem(key), SAVE_KEY);
 });
 
-test('boots and renders the tree from WASM', async ({ page }) => {
+test('boots with only the free root node revealed', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.click-btn')).toBeVisible();
   await expect(hudValue(page, 'Points')).toHaveText('0');
   await expect(hudValue(page, 'Per click')).toHaveText('1');
-  // All 18 nodes are present.
-  await expect(page.locator('.node')).toHaveCount(18);
+  // Locked nodes are hidden — only the root "Awakening" shows at the start.
+  await expect(page.locator('.node:visible')).toHaveCount(1);
+  await expect(node(page, 'Awakening')).toBeVisible();
 });
 
-test('clicking earns points and buying the root node applies its effect', async ({ page }) => {
+test('clicking the button earns points', async ({ page }) => {
   await page.goto('/');
   const clickBtn = page.locator('.click-btn');
+  for (let i = 0; i < 5; i++) await clickBtn.click();
+  await expect(hudValue(page, 'Points')).toHaveText('5');
+});
 
-  // Earn enough to afford "Awakening" (cost 10, +1 per click).
-  for (let i = 0; i < 10; i++) await clickBtn.click();
-  await expect(hudValue(page, 'Points')).toHaveText('10');
-
+test('the free root is buyable immediately and reveals its children', async ({ page }) => {
+  await page.goto('/');
   const awakening = node(page, 'Awakening');
   await expect(awakening).toHaveClass(/is-buyable/);
+  await expect(awakening).toContainText('free');
+
+  // Children stay hidden until the root is bought.
+  await expect(node(page, 'Sharper Clicks')).toBeHidden();
+  await expect(node(page, 'First Generator')).toBeHidden();
+
   await awakening.click();
 
-  // Bought: node is owned, points spent, per-click effect (+1) applied.
+  // Bought for free: owned, points unchanged, per-click effect (+1) applied.
   await expect(awakening).toHaveClass(/is-purchased/);
   await expect(awakening).toContainText('owned');
   await expect(hudValue(page, 'Points')).toHaveText('0');
   await expect(hudValue(page, 'Per click')).toHaveText('2');
+
+  // ...and its children are now revealed.
+  await expect(node(page, 'Sharper Clicks')).toBeVisible();
+  await expect(node(page, 'First Generator')).toBeVisible();
 });
 
-test('nodes behind an unmet prerequisite are locked and disabled', async ({ page }) => {
+test('nodes behind an unmet prerequisite are hidden', async ({ page }) => {
   await page.goto('/');
-  // "Double Tap" requires "Sharper Clicks" -> "Awakening"; nothing bought yet.
-  const locked = node(page, 'Double Tap');
-  await expect(locked).toHaveClass(/is-locked/);
-  await expect(locked).toBeDisabled();
+  // Deeper nodes are not revealed until their prerequisites are bought.
+  await expect(node(page, 'Double Tap')).toBeHidden();
+  await expect(node(page, 'The End')).toBeHidden();
 });
 
 test('idle generators accrue points over time', async ({ page }) => {

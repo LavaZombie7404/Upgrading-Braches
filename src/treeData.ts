@@ -50,7 +50,7 @@ export function effectText(n: TreeNode): string {
 
 export const TREE: TreeNode[] = [
   // Root ----------------------------------------------------------------------
-  { id: 0, name: 'Awakening', desc: 'It begins.', cost: 10, parent: -1, effect: Effect.ClickAdd, value: 1, col: 3, row: 0 },
+  { id: 0, name: 'Awakening', desc: 'It begins. (Free)', cost: 0, parent: -1, effect: Effect.ClickAdd, value: 1, col: 3, row: 0 },
 
   // Row 1 — the fork: click power (left) vs. automation (right) ----------------
   { id: 1, name: 'Sharper Clicks', desc: 'Every tap counts more.', cost: 25, parent: 0, effect: Effect.ClickAdd, value: 2, col: 1, row: 1 },

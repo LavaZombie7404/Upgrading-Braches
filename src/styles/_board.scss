@@ -30,6 +30,11 @@
   &--active {
     stroke: v.$green;
   }
+
+  // Edges leading into not-yet-revealed nodes.
+  &--hidden {
+    display: none;
+  }
 }
 
 // --- Nodes ---
@@ -66,18 +71,12 @@
     color: v.$gold;
   }
 
-  // --- States ---
-  &.is-locked {
-    background: v.$node-locked;
-    color: v.$text-dim;
-    opacity: 0.5;
-    cursor: not-allowed;
-
-    .node__cost {
-      color: v.$text-dim;
-    }
+  // Not-yet-revealed nodes are hidden entirely (overrides .node display).
+  &[hidden] {
+    display: none;
   }
 
+  // --- States ---
   &.is-unlocked {
     border-color: v.$border;
     // Prereq met but unaffordable: faint pulse hint.
