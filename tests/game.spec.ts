@@ -2,12 +2,36 @@ import { test, expect, type Page } from '@playwright/test';
 
 const SAVE_KEY = 'upgrade-tree.save.v1';
 
+interface WorldSave {
+  points: number;
+  totalEarned: number;
+}
+interface SaveState {
+  purchased: number[];
+  worlds: WorldSave[];
+}
+
 // Helpers ---------------------------------------------------------------------
 const hudValue = (page: Page, label: string) =>
   page.locator('.hud__stat', { hasText: label }).locator('.hud__value');
 
 const node = (page: Page, name: string) =>
   page.locator('.node', { hasText: name });
+
+/** Seed a save into localStorage before the app boots. */
+const seedSave = (page: Page, state: SaveState) =>
+  page.addInitScript(
+    ([key, json]) => localStorage.setItem(key, json),
+    [SAVE_KEY, JSON.stringify(state)] as const
+  );
+
+/** Build a SaveState with the given purchased nodes and per-world balances. */
+const save = (purchased: number[], w1: WorldSave, w2: WorldSave): SaveState => ({
+  purchased,
+  worlds: [w1, w2],
+});
+
+const ZERO: WorldSave = { points: 0, totalEarned: 0 };
 
 test.beforeEach(async ({ page }) => {
   // Start every test from a clean slate (no carried-over save).
@@ -81,10 +105,7 @@ test('nodes behind an unmet prerequisite are hidden', async ({ page }) => {
 
 test('idle generators accrue points over time', async ({ page }) => {
   // Seed a save where the first auto-generator (+1/sec) is already owned.
-  await page.addInitScript(
-    ([key, state]) => localStorage.setItem(key, state),
-    [SAVE_KEY, JSON.stringify({ points: 0, totalEarned: 0, purchased: [0, 2] })] as const
-  );
+  await seedSave(page, save([0, 2], ZERO, ZERO));
   await page.goto('/');
 
   await expect(hudValue(page, 'Per second')).toHaveText('1');
@@ -93,12 +114,9 @@ test('idle generators accrue points over time', async ({ page }) => {
 });
 
 test('World 2 is locked in the dropdown until its gateway is bought', async ({ page }) => {
-  // Seed: all of World 1 except the gateway owned, with points to spare.
+  // All of World 1 except the gateway owned, with points to spare.
   const purchased = Array.from({ length: 17 }, (_, i) => i); // nodes 0..16
-  await page.addInitScript(
-    ([key, state]) => localStorage.setItem(key, state),
-    [SAVE_KEY, JSON.stringify({ points: 300000, totalEarned: 300000, purchased })] as const
-  );
+  await seedSave(page, save(purchased, { points: 300000, totalEarned: 300000 }, ZERO));
   await page.goto('/');
 
   const world2Opt = page.locator('.world-select option', { hasText: 'World 2' });
@@ -110,23 +128,41 @@ test('World 2 is locked in the dropdown until its gateway is bought', async ({ p
   await gate.click();
   await expect(gate).toHaveClass(/is-purchased/);
 
-  // World 2 is now selectable.
+  // World 2 is now selectable, and a toast announces it.
   await expect(world2Opt).toHaveJSProperty('disabled', false);
+  await expect(page.locator('.toast')).toContainText('World 2 unlocked');
+});
+
+test('each world keeps its own independent currency', async ({ page }) => {
+  // World 2 already unlocked (gateway owned). World 1 has 500 banked, no
+  // generators (so its balance is stable); World 2 starts at zero.
+  await seedSave(page, save([17], { points: 500, totalEarned: 500 }, ZERO));
+  await page.goto('/');
+
+  await expect(hudValue(page, 'Points')).toHaveText('500'); // World 1 currency
+
+  await page.locator('.world-select').selectOption('2');
+  await expect(hudValue(page, 'Points')).toHaveText('0'); // World 2's own currency
+
+  const clickBtn = page.locator('.click-btn');
+  for (let i = 0; i < 3; i++) await clickBtn.click();
+  await expect(hudValue(page, 'Points')).toHaveText('3'); // earned in World 2
+
+  // Switching back, World 1's balance is untouched by World 2 clicks.
+  await page.locator('.world-select').selectOption('1');
+  await expect(hudValue(page, 'Points')).toHaveText('500');
 });
 
 test('selecting World 2 shows its tree, and the final node wins', async ({ page }) => {
-  // Seed all of World 1 (incl. gateway) owned, with plenty of points.
+  // All of World 1 (incl. gateway) owned; World 2 funded for its fresh curve.
   const purchased = Array.from({ length: 18 }, (_, i) => i); // nodes 0..17
-  await page.addInitScript(
-    ([key, state]) => localStorage.setItem(key, state),
-    [SAVE_KEY, JSON.stringify({ points: 1e9, totalEarned: 1e9, purchased })] as const
-  );
+  await seedSave(page, save(purchased, ZERO, { points: 50000, totalEarned: 50000 }));
   await page.goto('/');
 
   await page.locator('.world-select').selectOption('2');
   await expect(node(page, 'Nexus')).toBeVisible();
 
-  // Buy the path to the final node.
+  // Buy the path to the final node (spending World 2 currency).
   for (const name of ['Nexus', 'Plasma Generator', 'Antimatter', 'Cosmic Synergy', 'Final Ascension']) {
     const nd = node(page, name);
     await expect(nd).toHaveClass(/is-buyable/);

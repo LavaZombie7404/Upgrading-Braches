@@ -5,7 +5,7 @@
 // no game state of its own beyond which world is currently being viewed.
 
 import { Engine } from './engine';
-import { TREE, WORLDS, nodesForWorld, effectText, type TreeNode } from './treeData';
+import { TREE, WORLDS, nodesForWorld, worldIndex, effectText, type TreeNode } from './treeData';
 import { formatNumber } from './format';
 
 // Layout constants (px).
@@ -38,21 +38,39 @@ export class GameUI {
   private worldSelect!: HTMLSelectElement;
   private boardEl!: HTMLElement;
 
+  private toastLayer!: HTMLElement;
+
   private currentWorld = WORLDS[0].id;
   private readonly nodeEls = new Map<number, HTMLButtonElement>();
   private readonly edgeEls = new Map<number, SVGLineElement>();
+  /** Worlds whose unlock we've already announced (so we toast each once). */
+  private readonly announced = new Set<number>();
   private winShown = false;
 
   constructor(root: HTMLElement, engine: Engine, handlers: UIHandlers) {
     this.engine = engine;
     this.handlers = handlers;
     this.build(root);
+    this.seedAnnouncements();
+  }
+
+  /** The active world as a 0-based engine index. */
+  get activeWorldIndex(): number {
+    return worldIndex(this.currentWorld);
   }
 
   /** Is `world` unlocked yet (its gate node purchased)? */
   private worldUnlocked(worldId: number): boolean {
     const world = WORLDS.find((w) => w.id === worldId)!;
     return world.unlockNodeId === null || this.engine.isPurchased(world.unlockNodeId);
+  }
+
+  /** Mark already-unlocked worlds as announced so restored saves don't toast. */
+  private seedAnnouncements(): void {
+    this.announced.clear();
+    for (const w of WORLDS) {
+      if (this.worldUnlocked(w.id)) this.announced.add(w.id);
+    }
   }
 
   private build(root: HTMLElement): void {
@@ -97,7 +115,11 @@ export class GameUI {
     resetBtn.addEventListener('click', () => {
       if (confirm('Reset all progress? This cannot be undone.')) {
         this.handlers.onHardReset();
-        this.switchWorld(WORLDS[0].id);
+        this.currentWorld = WORLDS[0].id;
+        this.worldSelect.value = String(WORLDS[0].id);
+        this.seedAnnouncements();
+        this.buildBoard(this.currentWorld);
+        this.refresh();
       }
     });
     hud.append(resetBtn);
@@ -116,7 +138,20 @@ export class GameUI {
     overlay.hidden = true;
     root.append(overlay);
 
+    // --- Toast layer (transient notifications) ---
+    this.toastLayer = el('div', 'toast-layer');
+    root.append(this.toastLayer);
+
     this.buildBoard(this.currentWorld);
+  }
+
+  /** Show a transient toast notification. */
+  private showToast(message: string): void {
+    const toast = el('div', 'toast');
+    toast.textContent = message;
+    this.toastLayer.append(toast);
+    // Remove after the fade-out animation completes (~3.2s, see SCSS).
+    setTimeout(() => toast.remove(), 3200);
   }
 
   /** (Re)build the node + edge elements for one world. */
@@ -190,17 +225,23 @@ export class GameUI {
 
   /** Refresh all live values. Called every animation frame. */
   refresh(): void {
-    this.elPoints.textContent = formatNumber(this.engine.points);
-    this.elPerSec.textContent = formatNumber(this.engine.perSec);
-    this.elPerClick.textContent = formatNumber(this.engine.perClick);
+    // HUD shows the ACTIVE world's independent economy.
+    const idx = this.activeWorldIndex;
+    this.elPoints.textContent = formatNumber(this.engine.pointsOf(idx));
+    this.elPerSec.textContent = formatNumber(this.engine.perSecOf(idx));
+    this.elPerClick.textContent = formatNumber(this.engine.perClickOf(idx));
 
-    // Keep the dropdown's lock state in sync (worlds unlock mid-game).
+    // Keep the dropdown's lock state in sync, and toast newly-unlocked worlds.
     for (let i = 0; i < this.worldSelect.options.length; i++) {
       const opt = this.worldSelect.options[i];
       const w = WORLDS[i];
       const unlocked = this.worldUnlocked(w.id);
       opt.disabled = !unlocked;
       opt.textContent = unlocked ? w.name : `${w.name} 🔒`;
+      if (unlocked && !this.announced.has(w.id)) {
+        this.announced.add(w.id);
+        this.showToast(`${w.name} unlocked! 🔓`);
+      }
     }
 
     for (const n of nodesForWorld(this.currentWorld)) {
@@ -240,7 +281,7 @@ export class GameUI {
     const h = el('h2');
     h.textContent = 'You conquered every world! 🎉';
     const p = el('p');
-    p.textContent = `Lifetime points earned: ${formatNumber(this.engine.totalEarned)}`;
+    p.textContent = `Lifetime points earned: ${formatNumber(this.engine.totalEarnedAll())}`;
     const close = el('button', 'win-overlay__close') as HTMLButtonElement;
     close.type = 'button';
     close.textContent = 'Keep playing';

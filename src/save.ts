@@ -9,7 +9,7 @@ export function loadSave(): SaveState | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as SaveState;
-    if (typeof data.points !== 'number' || !Array.isArray(data.purchased)) return null;
+    if (!Array.isArray(data.purchased) || !Array.isArray(data.worlds)) return null;
     return data;
   } catch {
     return null;

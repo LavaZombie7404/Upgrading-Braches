@@ -1,0 +1,45 @@
+@use 'variables' as v;
+
+.toast-layer {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 0.7rem 1.3rem;
+  font-weight: 700;
+  color: v.$text;
+  background: v.$bg-elev;
+  border: 1px solid v.$accent-2;
+  border-radius: v.$radius;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(v.$accent-2, 0.5);
+  // Slide/fade in, hold, then fade out over the element's lifetime.
+  animation: toast-life 3.2s ease forwards;
+}
+
+@keyframes toast-life {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}

@@ -107,25 +107,32 @@ export const TREE: TreeNode[] = [
   { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
 
   // === WORLD 2 ===============================================================
-  // Entry (depends on "Unlock World 2") ---------------------------------------
-  { id: 18, name: 'Nexus', desc: 'A new realm of power.', cost: 300000, parent: 17, effect: Effect.SecAdd, value: 500, world: 2, col: 3, row: 0 },
+  // World 2 has its OWN currency, starting from zero — so it runs a fresh,
+  // World-1-scale progression. The entry node depends on "Unlock World 2".
+  // Free entry root ------------------------------------------------------------
+  { id: 18, name: 'Nexus', desc: 'A new realm. (Free)', cost: 0, parent: 17, effect: Effect.ClickAdd, value: 1, world: 2, col: 3, row: 0 },
 
   // Row 1 ----------------------------------------------------------------------
-  { id: 19, name: 'Quantum Clicks', desc: 'Click power ×3.', cost: 500000, parent: 18, effect: Effect.ClickMul, value: 3, world: 2, col: 1, row: 1 },
-  { id: 20, name: 'Plasma Generator', desc: 'Vast passive flow.', cost: 600000, parent: 18, effect: Effect.SecAdd, value: 2000, world: 2, col: 5, row: 1 },
+  { id: 19, name: 'Quantum Clicks', desc: 'Every tap counts more.', cost: 20, parent: 18, effect: Effect.ClickAdd, value: 3, world: 2, col: 1, row: 1 },
+  { id: 20, name: 'Plasma Generator', desc: 'Passive flow.', cost: 40, parent: 18, effect: Effect.SecAdd, value: 2, world: 2, col: 5, row: 1 },
 
   // Row 2 ----------------------------------------------------------------------
-  { id: 21, name: 'Time Warp', desc: 'Click power ×5.', cost: 1200000, parent: 19, effect: Effect.ClickMul, value: 5, world: 2, col: 1, row: 2 },
-  { id: 22, name: 'Antimatter', desc: 'Generators ×3.', cost: 1500000, parent: 20, effect: Effect.SecMul, value: 3, world: 2, col: 5, row: 2 },
+  { id: 21, name: 'Time Warp', desc: 'Click power ×3.', cost: 120, parent: 19, effect: Effect.ClickMul, value: 3, world: 2, col: 1, row: 2 },
+  { id: 22, name: 'Antimatter', desc: 'Generators ×2.', cost: 200, parent: 20, effect: Effect.SecMul, value: 2, world: 2, col: 5, row: 2 },
 
   // Row 3 — convergence --------------------------------------------------------
-  { id: 23, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 5000000, parent: 22, effect: Effect.GlobalMul, value: 3, world: 2, col: 3, row: 3 },
+  { id: 23, name: 'Cosmic Synergy', desc: 'All output ×3.', cost: 1500, parent: 22, effect: Effect.GlobalMul, value: 3, world: 2, col: 3, row: 3 },
 
   // Row 4 — the goal -----------------------------------------------------------
-  { id: 24, name: 'Final Ascension', desc: 'Reach it to win.', cost: 20000000, parent: 23, effect: Effect.GlobalMul, value: 2, isEnd: true, world: 2, col: 3, row: 4 },
+  { id: 24, name: 'Final Ascension', desc: 'Reach it to win.', cost: 15000, parent: 23, effect: Effect.GlobalMul, value: 2, isEnd: true, world: 2, col: 3, row: 4 },
 ];
 
 /** Nodes belonging to a given world, in id order. */
 export function nodesForWorld(world: number): TreeNode[] {
   return TREE.filter((n) => n.world === world);
+}
+
+/** 0-based index of a world id within WORLDS (matches the engine's world index). */
+export function worldIndex(worldId: number): number {
+  return WORLDS.findIndex((w) => w.id === worldId);
 }
