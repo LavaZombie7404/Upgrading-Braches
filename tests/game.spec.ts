@@ -31,6 +31,13 @@ test('clicking the button earns points', async ({ page }) => {
   await expect(hudValue(page, 'Points')).toHaveText('5');
 });
 
+test('pressing Space earns points', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.click-btn')).toBeVisible(); // wait for the engine to load
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Space');
+  await expect(hudValue(page, 'Points')).toHaveText('4');
+});
+
 test('the free root is buyable immediately and reveals its children', async ({ page }) => {
   await page.goto('/');
   const awakening = node(page, 'Awakening');

@@ -28,6 +28,15 @@ async function start(): Promise<void> {
 
   const save = () => writeSave(engine.serialize());
 
+  // Spacebar earns points too (hold to spam). preventDefault stops the page
+  // from scrolling and avoids double-firing a focused button.
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      engine.click();
+    }
+  });
+
   // --- Game loop ---
   let last = performance.now();
   let sinceSave = 0;

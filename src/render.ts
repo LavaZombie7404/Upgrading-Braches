@@ -61,7 +61,7 @@ export class GameUI {
 
     const clickBtn = el('button', 'click-btn') as HTMLButtonElement;
     clickBtn.type = 'button';
-    clickBtn.textContent = 'Click for points';
+    clickBtn.textContent = 'Click for points (or press Space)';
     clickBtn.addEventListener('click', () => this.handlers.onClickButton());
     hud.append(clickBtn);
 
