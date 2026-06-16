@@ -190,18 +190,18 @@ test('completing a world unlocks the next one via its gateway', async ({ page })
   await expect(page.locator('.toast')).toContainText('World 3 unlocked');
 });
 
-test('the bonus tree reveals after Unlock World 2 and adds a trickle', async ({ page }) => {
+test('the bonus tree reveals after Unlock World 2 and pays out big', async ({ page }) => {
   // Only the gateway owned, so World 1 per-click is the base 1 and the bonus
-  // tree (which hangs off the gateway) is revealed. Spare points to buy with.
-  await seedSave(page, mkSave([17], { 0: { points: 5000, totalEarned: 5000 } }));
+  // tree (which hangs off the gateway) is revealed. Fund the first bonus node.
+  await seedSave(page, mkSave([17], { 0: { points: 50_000, totalEarned: 50_000 } }));
   await page.goto('/');
 
   await expect(hudValue(page, 'Per click')).toHaveText('1');
   const bragging = node(page, 'Bragging Rights');
   await expect(bragging).toBeVisible();
-  await bragging.click(); // +1 per click
+  await bragging.click(); // +10,000 per click
   await expect(bragging).toHaveClass(/is-purchased/);
-  await expect(hudValue(page, 'Per click')).toHaveText('2');
+  await expect(hudValue(page, 'Per click')).toHaveText('10.00K');
 });
 
 test('buying the final node in the last world wins the game', async ({ page }) => {

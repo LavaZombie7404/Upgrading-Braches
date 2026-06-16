@@ -106,14 +106,27 @@ const WORLD1: TreeNode[] = [
   // Row 7 — the gateway --------------------------------------------------------
   { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
 
-  // Rows 8+ — a "bonus" tree hanging off the gateway, revealed only after
-  // "Unlock World 2" is bought. Mostly flavor: each node adds a tiny trickle
-  // (+1/click or +1/sec) of World 1 currency you've largely outgrown.
-  { id: 18, name: 'Bragging Rights', desc: 'The number goes up. +1 per click.', cost: 1000, parent: 17, effect: Effect.ClickAdd, value: 1, world: 1, col: 4, row: 8 },
-  { id: 19, name: 'Participation Trophy', desc: 'You showed up. +1/sec.', cost: 2500, parent: 18, effect: Effect.SecAdd, value: 1, world: 1, col: 2, row: 9 },
-  { id: 20, name: 'Decorative Plant', desc: 'It ties the tree together. +1/sec.', cost: 2500, parent: 18, effect: Effect.SecAdd, value: 1, world: 1, col: 6, row: 9 },
-  { id: 21, name: 'Existential Dread', desc: 'Why are you still clicking? +1 per click.', cost: 7500, parent: 19, effect: Effect.ClickAdd, value: 1, world: 1, col: 2, row: 10 },
-  { id: 22, name: 'Certificate of Nothing', desc: 'Suitable for framing. +1/sec.', cost: 7500, parent: 20, effect: Effect.SecAdd, value: 1, world: 1, col: 6, row: 10 },
+  // Rows 8+ — a big "bonus" tree hanging off the gateway, revealed only after
+  // "Unlock World 2" is bought. It pays out absurd amounts of World 1 currency
+  // (which you've largely outgrown) — a pure big-number playground.
+  { id: 18, name: 'Bragging Rights', desc: 'The number goes up. +10K per click.', cost: 20_000, parent: 17, effect: Effect.ClickAdd, value: 10_000, world: 1, col: 4, row: 8 },
+  { id: 19, name: 'Participation Trophy', desc: 'You showed up. +15K/sec.', cost: 40_000, parent: 18, effect: Effect.SecAdd, value: 15_000, world: 1, col: 2, row: 9 },
+  { id: 20, name: 'Gold Star', desc: 'Shiny. +15K per click.', cost: 40_000, parent: 18, effect: Effect.ClickAdd, value: 15_000, world: 1, col: 6, row: 9 },
+  { id: 21, name: 'Honorable Mention', desc: 'So close. +25K per click.', cost: 100_000, parent: 19, effect: Effect.ClickAdd, value: 25_000, world: 1, col: 1, row: 10 },
+  { id: 22, name: 'Pat on the Back', desc: 'There, there. +25K/sec.', cost: 100_000, parent: 19, effect: Effect.SecAdd, value: 25_000, world: 1, col: 3, row: 10 },
+  { id: 23, name: 'Inflated Ego', desc: 'It grows. +25K per click.', cost: 100_000, parent: 20, effect: Effect.ClickAdd, value: 25_000, world: 1, col: 5, row: 10 },
+  { id: 24, name: 'Number Go Brrr', desc: 'Brrr. +30K/sec.', cost: 100_000, parent: 20, effect: Effect.SecAdd, value: 30_000, world: 1, col: 7, row: 10 },
+  { id: 25, name: 'Diminishing Returns', desc: 'Ironically large. +50K/sec.', cost: 300_000, parent: 21, effect: Effect.SecAdd, value: 50_000, world: 1, col: 1, row: 11 },
+  { id: 26, name: 'Sunk Cost Fallacy', desc: 'Too late to stop. +50K per click.', cost: 300_000, parent: 22, effect: Effect.ClickAdd, value: 50_000, world: 1, col: 3, row: 11 },
+  { id: 27, name: 'More Cowbell', desc: 'Needs more. +50K/sec.', cost: 300_000, parent: 23, effect: Effect.SecAdd, value: 50_000, world: 1, col: 5, row: 11 },
+  { id: 28, name: 'Infinite Scroll', desc: 'Just one more. +60K per click.', cost: 300_000, parent: 24, effect: Effect.ClickAdd, value: 60_000, world: 1, col: 7, row: 11 },
+  { id: 29, name: 'Touch Grass', desc: 'You will not. +100K/sec.', cost: 800_000, parent: 25, effect: Effect.SecAdd, value: 100_000, world: 1, col: 1, row: 12 },
+  { id: 30, name: 'Big Red Button', desc: 'Do not press. +100K per click.', cost: 800_000, parent: 26, effect: Effect.ClickAdd, value: 100_000, world: 1, col: 3, row: 12 },
+  { id: 31, name: 'Decorative Plant', desc: 'It ties the tree together. +100K/sec.', cost: 800_000, parent: 27, effect: Effect.SecAdd, value: 100_000, world: 1, col: 5, row: 12 },
+  { id: 32, name: 'Certificate of Nothing', desc: 'Suitable for framing. +120K per click.', cost: 800_000, parent: 28, effect: Effect.ClickAdd, value: 120_000, world: 1, col: 7, row: 12 },
+  { id: 33, name: 'Existential Dread', desc: 'Why are you still here? +250K/sec.', cost: 2_000_000, parent: 29, effect: Effect.SecAdd, value: 250_000, world: 1, col: 2, row: 13 },
+  { id: 34, name: 'Peak Performance', desc: 'It is all downhill. +250K per click.', cost: 2_000_000, parent: 31, effect: Effect.ClickAdd, value: 250_000, world: 1, col: 6, row: 13 },
+  { id: 35, name: 'The Smugularity', desc: 'Maximum smug. +1M/sec.', cost: 8_000_000, parent: 33, effect: Effect.SecAdd, value: 1_000_000, world: 1, col: 4, row: 14 },
 ];
 
 /** Each generated world deals in ~WORLD_SCALE× bigger numbers than the previous. */
