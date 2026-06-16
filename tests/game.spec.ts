@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { TREE } from '../src/treeData';
 
 const SAVE_KEY = 'upgrade-tree.save.v1';
 const NUM_WORLDS = 7;
@@ -182,31 +183,27 @@ test('completing a world unlocks the next one via its gateway', async ({ page })
   await expect(page.locator('.toast')).toContainText('World 3 unlocked');
 });
 
-test('the useless bonus tree reveals after Unlock World 2 and does nothing', async ({ page }) => {
-  // World 1 nearly complete; buy the gateway to reveal the bonus tree.
-  await seedSave(page, mkSave(range(17), { 0: { points: 300000, totalEarned: 300000 } }));
+test('the bonus tree reveals after Unlock World 2 and adds a trickle', async ({ page }) => {
+  // Only the gateway owned, so World 1 per-click is the base 1 and the bonus
+  // tree (which hangs off the gateway) is revealed. Spare points to buy with.
+  await seedSave(page, mkSave([17], { 0: { points: 5000, totalEarned: 5000 } }));
   await page.goto('/');
 
-  await expect(node(page, 'Bragging Rights')).toBeHidden();
-  await node(page, 'Unlock World 2').click();
-  await expect(node(page, 'Bragging Rights')).toBeVisible();
-
-  // It's a ×1 node — buying it must not change the economy.
-  const perClickBefore = await hudValue(page, 'Per click').textContent();
-  await node(page, 'Bragging Rights').click();
-  await expect(node(page, 'Bragging Rights')).toHaveClass(/is-purchased/);
-  await expect(hudValue(page, 'Per click')).toHaveText(perClickBefore!);
+  await expect(hudValue(page, 'Per click')).toHaveText('1');
+  const bragging = node(page, 'Bragging Rights');
+  await expect(bragging).toBeVisible();
+  await bragging.click(); // +1 per click
+  await expect(bragging).toHaveClass(/is-purchased/);
+  await expect(hudValue(page, 'Per click')).toHaveText('2');
 });
 
 test('buying the final node in the last world wins the game', async ({ page }) => {
-  // Everything owned except the very last node; fund the last world. The last
-  // world's costs are scaled up (WORLD_SCALE^5), so it needs a big balance.
-  const lastWorldIndex = NUM_WORLDS - 1;
-  const WORLD1_NODES = 23; // tutorial tree (18) + useless bonus tree (5)
-  const totalNodes = WORLD1_NODES + (NUM_WORLDS - 1) * 7;
-  await seedSave(page, mkSave(range(totalNodes - 1), {
-    [lastWorldIndex]: { points: 20_000_000, totalEarned: 20_000_000 },
-  }));
+  // Own everything except the last world's final node; fund that world exactly.
+  const finalSpec = TREE.find((n) => n.isEnd)!;
+  await seedSave(page, mkSave(
+    TREE.filter((n) => !n.isEnd).map((n) => n.id),
+    { [NUM_WORLDS - 1]: { points: finalSpec.cost, totalEarned: finalSpec.cost } }
+  ));
   await page.goto('/');
 
   await page.locator('.world-select').selectOption(String(NUM_WORLDS));

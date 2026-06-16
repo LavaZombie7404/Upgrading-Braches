@@ -48,9 +48,8 @@ export interface World {
   unlockNodeId: number | null;
 }
 
-/** Total number of worlds. Change this one constant to add/remove worlds. */
+/** Total number of worlds. Must match the number of WORLD1 + BLUEPRINTS below. */
 export const TOTAL_WORLDS = 7;
-const NODES_PER_WORLD = 7; // template size for generated worlds (2..N)
 
 // A short, human-readable summary of a node's effect (used in labels/tooltips).
 export function effectText(n: TreeNode): string {
@@ -105,56 +104,184 @@ const WORLD1: TreeNode[] = [
   // Row 7 — the gateway --------------------------------------------------------
   { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
 
-  // Rows 8+ — a deliberately USELESS bonus tree hanging off the gateway. Every
-  // node is ×1 (no effect), bought with World 1 currency you no longer need.
-  // Revealed only after "Unlock World 2" is purchased. Pure flavor.
-  { id: 18, name: 'Bragging Rights', desc: 'The number goes up. That is all.', cost: 1000, parent: 17, effect: Effect.GlobalMul, value: 1, world: 1, col: 4, row: 8 },
-  { id: 19, name: 'Participation Trophy', desc: 'You showed up. Congrats.', cost: 2500, parent: 18, effect: Effect.GlobalMul, value: 1, world: 1, col: 2, row: 9 },
-  { id: 20, name: 'Decorative Plant', desc: 'It really ties the tree together.', cost: 2500, parent: 18, effect: Effect.GlobalMul, value: 1, world: 1, col: 6, row: 9 },
-  { id: 21, name: 'Existential Dread', desc: 'Why are you still clicking?', cost: 7500, parent: 19, effect: Effect.GlobalMul, value: 1, world: 1, col: 2, row: 10 },
-  { id: 22, name: 'Certificate of Nothing', desc: 'Suitable for framing.', cost: 7500, parent: 20, effect: Effect.GlobalMul, value: 1, world: 1, col: 6, row: 10 },
+  // Rows 8+ — a "bonus" tree hanging off the gateway, revealed only after
+  // "Unlock World 2" is bought. Mostly flavor: each node adds a tiny trickle
+  // (+1/click or +1/sec) of World 1 currency you've largely outgrown.
+  { id: 18, name: 'Bragging Rights', desc: 'The number goes up. +1 per click.', cost: 1000, parent: 17, effect: Effect.ClickAdd, value: 1, world: 1, col: 4, row: 8 },
+  { id: 19, name: 'Participation Trophy', desc: 'You showed up. +1/sec.', cost: 2500, parent: 18, effect: Effect.SecAdd, value: 1, world: 1, col: 2, row: 9 },
+  { id: 20, name: 'Decorative Plant', desc: 'It ties the tree together. +1/sec.', cost: 2500, parent: 18, effect: Effect.SecAdd, value: 1, world: 1, col: 6, row: 9 },
+  { id: 21, name: 'Existential Dread', desc: 'Why are you still clicking? +1 per click.', cost: 7500, parent: 19, effect: Effect.ClickAdd, value: 1, world: 1, col: 2, row: 10 },
+  { id: 22, name: 'Certificate of Nothing', desc: 'Suitable for framing. +1/sec.', cost: 7500, parent: 20, effect: Effect.SecAdd, value: 1, world: 1, col: 6, row: 10 },
 ];
 
 /** Each generated world deals in ~WORLD_SCALE× bigger numbers than the previous. */
 const WORLD_SCALE = 5;
 
-interface WorldTheme {
-  title: string;
-  /** Node names in template order: [root, click+, sec+, clickMul, secMul, globalMul]. */
-  nodes: [string, string, string, string, string, string];
+// A node within a world blueprint. `parent` is a LOCAL index into the blueprint's
+// own node list, or -1 for the entry root (which chains to the previous world's
+// gateway). Costs scale by the world's factor; flat income (ClickAdd/SecAdd) does
+// too, while multipliers stay constant.
+interface NodeSpec {
+  name: string;
+  desc: string;
+  parent: number;
+  effect: Effect;
+  value: number;
+  cost: number;
+  col: number;
+  row: number;
 }
 
-// Distinct theme per generated world (index = worldId - 2). World 2 keeps the
-// original names so its balance/feel is unchanged.
-const THEMES: WorldTheme[] = [
-  { title: 'Quantum Reach', nodes: ['Nexus', 'Quantum Clicks', 'Plasma Generator', 'Time Warp', 'Antimatter', 'Cosmic Synergy'] },
-  { title: 'Stellar Forge', nodes: ['Stardust', 'Solar Taps', 'Fusion Reactor', 'Nova Burst', 'Pulsar Core', 'Galactic Harmony'] },
-  { title: 'Void Dominion', nodes: ['Rift', 'Dark Clicks', 'Void Engine', 'Singular Pulse', 'Entropy Coil', 'Abyssal Unity'] },
-  { title: 'Chrono Spire', nodes: ['Origin', 'Tempo Taps', 'Chrono Mill', 'Warp Cascade', 'Epoch Drive', 'Eternal Sync'] },
-  { title: 'Aether Crown', nodes: ['Spark', 'Aether Taps', 'Mana Wellspring', 'Surge Rite', 'Ley Reactor', 'Arcane Concord'] },
-  { title: 'Omega Throne', nodes: ['Genesis', 'Omega Clicks', 'Infinity Core', 'Apex Strike', 'Eternity Engine', 'Absolute Synergy'] },
+interface WorldBlueprint {
+  title: string;
+  /** node[0] is the free entry root; the LAST node is the completion/gateway
+   *  (its name/effect are overridden to "Unlock World N+1" or "Final Ascension"). */
+  nodes: NodeSpec[];
+}
+
+// Each generated world (index = worldId - 2) has its OWN shape and theme. Shapes
+// vary in node count, branching and silhouette so no two worlds play alike.
+const GATE = { name: 'Gateway', desc: '', effect: Effect.GlobalMul, value: 1 }; // overridden in makeWorld
+const BLUEPRINTS: WorldBlueprint[] = [
+  // World 2 — "Quantum Reach": a 2-wide diamond (unchanged from before).
+  {
+    title: 'Quantum Reach',
+    nodes: [
+      { name: 'Nexus', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
+      { name: 'Quantum Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 3, cost: 20, col: 1, row: 1 },
+      { name: 'Plasma Generator', desc: 'Passive flow.', parent: 0, effect: Effect.SecAdd, value: 2, cost: 40, col: 5, row: 1 },
+      { name: 'Time Warp', desc: 'Click power ×3.', parent: 1, effect: Effect.ClickMul, value: 3, cost: 120, col: 1, row: 2 },
+      { name: 'Antimatter', desc: 'Generators ×2.', parent: 2, effect: Effect.SecMul, value: 2, cost: 200, col: 5, row: 2 },
+      { name: 'Cosmic Synergy', desc: 'All output ×3.', parent: 4, effect: Effect.GlobalMul, value: 3, cost: 800, col: 3, row: 3 },
+      { ...GATE, parent: 5, cost: 4000, col: 3, row: 4 },
+    ],
+  },
+  // World 3 — "Stellar Forge": a 3-wide fan that narrows to a spire.
+  {
+    title: 'Stellar Forge',
+    nodes: [
+      { name: 'Stardust', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
+      { name: 'Solar Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 4, cost: 25, col: 1, row: 1 },
+      { name: 'Fusion Reactor', desc: 'Passive flow.', parent: 0, effect: Effect.SecAdd, value: 3, cost: 50, col: 3, row: 1 },
+      { name: 'Ion Drive', desc: 'Click power ×2.', parent: 0, effect: Effect.ClickMul, value: 2, cost: 110, col: 5, row: 1 },
+      { name: 'Nova Burst', desc: 'Click power ×2.', parent: 1, effect: Effect.ClickMul, value: 2, cost: 220, col: 1, row: 2 },
+      { name: 'Pulsar Core', desc: 'Generators ×2.', parent: 2, effect: Effect.SecMul, value: 2, cost: 300, col: 3, row: 2 },
+      { name: 'Galactic Harmony', desc: 'All output ×3.', parent: 5, effect: Effect.GlobalMul, value: 3, cost: 900, col: 3, row: 3 },
+      { ...GATE, parent: 6, cost: 4500, col: 3, row: 4 },
+    ],
+  },
+  // World 4 — "Void Dominion": a tall, narrow spine with a single offshoot.
+  {
+    title: 'Void Dominion',
+    nodes: [
+      { name: 'Rift', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 2, row: 0 },
+      { name: 'Dark Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 5, cost: 30, col: 2, row: 1 },
+      { name: 'Entropy Coil', desc: 'Generators ×2.', parent: 0, effect: Effect.SecMul, value: 2, cost: 150, col: 4, row: 1 },
+      { name: 'Void Engine', desc: 'Passive flow.', parent: 1, effect: Effect.SecAdd, value: 4, cost: 70, col: 2, row: 2 },
+      { name: 'Abyssal Unity', desc: 'All output ×3.', parent: 3, effect: Effect.GlobalMul, value: 3, cost: 700, col: 2, row: 3 },
+      { ...GATE, parent: 4, cost: 3500, col: 2, row: 4 },
+    ],
+  },
+  // World 5 — "Chrono Spire": a stacked double-diamond.
+  {
+    title: 'Chrono Spire',
+    nodes: [
+      { name: 'Origin', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 3, row: 0 },
+      { name: 'Tempo Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 3, cost: 25, col: 1, row: 1 },
+      { name: 'Chrono Mill', desc: 'Passive flow.', parent: 0, effect: Effect.SecAdd, value: 2, cost: 45, col: 5, row: 1 },
+      { name: 'Warp Cascade', desc: 'Click power ×2.', parent: 1, effect: Effect.ClickMul, value: 2, cost: 130, col: 1, row: 2 },
+      { name: 'Epoch Drive', desc: 'Generators ×2.', parent: 2, effect: Effect.SecMul, value: 2, cost: 210, col: 5, row: 2 },
+      { name: 'Time Lattice', desc: 'All output ×2.', parent: 3, effect: Effect.GlobalMul, value: 2, cost: 450, col: 3, row: 3 },
+      { name: 'Quantum Loop', desc: 'Click power ×2.', parent: 5, effect: Effect.ClickMul, value: 2, cost: 900, col: 1, row: 4 },
+      { name: 'Eternal Sync', desc: 'Big passive flow.', parent: 5, effect: Effect.SecAdd, value: 40, cost: 1100, col: 5, row: 4 },
+      { ...GATE, parent: 7, cost: 5000, col: 3, row: 5 },
+    ],
+  },
+  // World 6 — "Aether Crown": a bushy binary tree (four leaves).
+  {
+    title: 'Aether Crown',
+    nodes: [
+      { name: 'Spark', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 4, row: 0 },
+      { name: 'Aether Taps', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 4, cost: 25, col: 2, row: 1 },
+      { name: 'Mana Wellspring', desc: 'Passive flow.', parent: 0, effect: Effect.SecAdd, value: 3, cost: 50, col: 6, row: 1 },
+      { name: 'Surge Rite', desc: 'Click power ×2.', parent: 1, effect: Effect.ClickMul, value: 2, cost: 140, col: 1, row: 2 },
+      { name: 'Rune Etching', desc: 'Even more per tap.', parent: 1, effect: Effect.ClickAdd, value: 10, cost: 160, col: 3, row: 2 },
+      { name: 'Ley Reactor', desc: 'Generators ×2.', parent: 2, effect: Effect.SecMul, value: 2, cost: 200, col: 5, row: 2 },
+      { name: 'Font of Mana', desc: 'More passive flow.', parent: 2, effect: Effect.SecAdd, value: 12, cost: 240, col: 7, row: 2 },
+      { name: 'Arcane Concord', desc: 'All output ×3.', parent: 5, effect: Effect.GlobalMul, value: 3, cost: 1000, col: 4, row: 3 },
+      { ...GATE, parent: 7, cost: 4500, col: 4, row: 4 },
+    ],
+  },
+  // World 7 — "Omega Throne": a grand, two-tower structure into the finale.
+  {
+    title: 'Omega Throne',
+    nodes: [
+      { name: 'Genesis', desc: 'A new realm. (Free)', parent: -1, effect: Effect.ClickAdd, value: 1, cost: 0, col: 4, row: 0 },
+      { name: 'Omega Clicks', desc: 'Every tap counts more.', parent: 0, effect: Effect.ClickAdd, value: 5, cost: 30, col: 2, row: 1 },
+      { name: 'Infinity Core', desc: 'Passive flow.', parent: 0, effect: Effect.SecAdd, value: 4, cost: 60, col: 6, row: 1 },
+      { name: 'Apex Strike', desc: 'Click power ×2.', parent: 1, effect: Effect.ClickMul, value: 2, cost: 150, col: 1, row: 2 },
+      { name: 'Flux Capacitor', desc: 'More passive flow.', parent: 1, effect: Effect.SecAdd, value: 10, cost: 180, col: 3, row: 2 },
+      { name: 'Eternity Engine', desc: 'Generators ×2.', parent: 2, effect: Effect.SecMul, value: 2, cost: 220, col: 5, row: 2 },
+      { name: 'Singularity Well', desc: 'Even more per tap.', parent: 2, effect: Effect.ClickAdd, value: 30, cost: 260, col: 7, row: 2 },
+      { name: 'Cosmic Crown', desc: 'All output ×2.', parent: 3, effect: Effect.GlobalMul, value: 2, cost: 600, col: 2, row: 3 },
+      { name: 'Astral Nexus', desc: 'All output ×2.', parent: 5, effect: Effect.GlobalMul, value: 2, cost: 700, col: 6, row: 3 },
+      { name: 'Absolute Synergy', desc: 'All output ×2.', parent: 7, effect: Effect.GlobalMul, value: 2, cost: 2000, col: 4, row: 4 },
+      { ...GATE, parent: 9, cost: 6000, col: 4, row: 5 },
+    ],
+  },
 ];
 
-// Generated worlds (2..N) share one 7-node shape, but each gets its own theme
-// and scale factor `f`. Costs AND flat income (ClickAdd/SecAdd) scale by `f`
-// together, while multipliers stay constant — so deeper worlds show bigger
-// numbers at the same pacing. `parentGateId` gates this world's free entry.
+// Each world also gets a side grid of optional BONUS upgrades hanging off its
+// free root — extra depth without touching the critical path.
+const EXTRA_COLS = 4;
+const EXTRA_ROWS = 4; // EXTRA_COLS * EXTRA_ROWS bonus nodes per generated world
+
+// Instantiate one world from its blueprint: assign global ids, chain the entry
+// root to the previous world's gateway, apply the scale factor, turn the last
+// blueprint node into the gateway, then append the bonus grid.
 function makeWorld(worldId: number, start: number, parentGateId: number, last: boolean): TreeNode[] {
   const f = Math.pow(WORLD_SCALE, worldId - 2); // 1, 5, 25, ... for worlds 2, 3, 4, ...
-  const n = THEMES[worldId - 2].nodes;
-  const gatewayId = start + NODES_PER_WORLD - 1;
-  const gateway: TreeNode = last
-    ? { id: gatewayId, name: 'Final Ascension', desc: 'Reach it to win.', cost: 4000 * f, parent: start + 5, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: 3, row: 4 }
-    : { id: gatewayId, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost: 4000 * f, parent: start + 5, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: 3, row: 4 };
-  return [
-    { id: start + 0, name: n[0], desc: 'A new realm. (Free)', cost: 0, parent: parentGateId, effect: Effect.ClickAdd, value: 1 * f, world: worldId, col: 3, row: 0 },
-    { id: start + 1, name: n[1], desc: 'Every tap counts more.', cost: 20 * f, parent: start + 0, effect: Effect.ClickAdd, value: 3 * f, world: worldId, col: 1, row: 1 },
-    { id: start + 2, name: n[2], desc: 'Passive flow.', cost: 40 * f, parent: start + 0, effect: Effect.SecAdd, value: 2 * f, world: worldId, col: 5, row: 1 },
-    { id: start + 3, name: n[3], desc: 'Click power ×3.', cost: 120 * f, parent: start + 1, effect: Effect.ClickMul, value: 3, world: worldId, col: 1, row: 2 },
-    { id: start + 4, name: n[4], desc: 'Generators ×2.', cost: 200 * f, parent: start + 2, effect: Effect.SecMul, value: 2, world: worldId, col: 5, row: 2 },
-    { id: start + 5, name: n[5], desc: 'All output ×3.', cost: 800 * f, parent: start + 4, effect: Effect.GlobalMul, value: 3, world: worldId, col: 3, row: 3 },
-    gateway,
-  ];
+  const bp = BLUEPRINTS[worldId - 2];
+  const coreLen = bp.nodes.length;
+
+  const core: TreeNode[] = bp.nodes.map((spec, i) => {
+    const id = start + i;
+    const parent = spec.parent < 0 ? parentGateId : start + spec.parent;
+    const cost = spec.cost * f;
+    if (i === coreLen - 1) {
+      return last
+        ? { id, name: 'Final Ascension', desc: 'Reach it to win.', cost, parent, effect: Effect.GlobalMul, value: 2, isEnd: true, world: worldId, col: spec.col, row: spec.row }
+        : { id, name: `Unlock World ${worldId + 1}`, desc: `Opens the gateway to World ${worldId + 1}.`, cost, parent, effect: Effect.GlobalMul, value: 1, unlocksWorld: worldId + 1, world: worldId, col: spec.col, row: spec.row };
+    }
+    // Flat income scales with the world; multipliers are ratios and don't.
+    const scales = spec.effect === Effect.ClickAdd || spec.effect === Effect.SecAdd;
+    return { id, name: spec.name, desc: spec.desc, cost, parent, effect: spec.effect, value: scales ? spec.value * f : spec.value, world: worldId, col: spec.col, row: spec.row };
+  });
+
+  // Bonus grid: EXTRA_COLS chains of EXTRA_ROWS, each chain rooted at the world's
+  // free entry node, laid out to the right of the main tree.
+  const extras: TreeNode[] = [];
+  for (let k = 0; k < EXTRA_COLS * EXTRA_ROWS; k++) {
+    const c = Math.floor(k / EXTRA_ROWS);
+    const r = k % EXTRA_ROWS;
+    const id = start + coreLen + k;
+    const parent = r === 0 ? start : id - 1; // top of each column hangs off the root
+    const isClick = c % 2 === 0;
+    extras.push({
+      id,
+      name: `${isClick ? 'Bonus Tap' : 'Bonus Flow'} ${k + 1}`,
+      desc: isClick ? 'Optional bonus: more per click.' : 'Optional bonus: more per second.',
+      cost: 250 * (k + 1) * f,
+      parent,
+      effect: isClick ? Effect.ClickAdd : Effect.SecAdd,
+      value: (r + 1) * f,
+      world: worldId,
+      col: 8 + c,
+      row: r,
+    });
+  }
+
+  return [...core, ...extras];
 }
 
 export const TREE: TreeNode[] = [...WORLD1];
@@ -163,12 +290,14 @@ export const WORLDS: World[] = [{ id: 1, name: 'World 1', unlockNodeId: null }];
 // Build worlds 2..TOTAL_WORLDS, chaining each to the previous world's gateway.
 {
   let prevGateway = 17; // World 1's "Unlock World 2" node
-  let nextId = WORLD1.length; // 18
+  let nextId = WORLD1.length;
   for (let w = 2; w <= TOTAL_WORLDS; w++) {
     WORLDS.push({ id: w, name: `World ${w}`, unlockNodeId: prevGateway });
-    TREE.push(...makeWorld(w, nextId, prevGateway, w === TOTAL_WORLDS));
-    prevGateway = nextId + NODES_PER_WORLD - 1;
-    nextId += NODES_PER_WORLD;
+    const bp = BLUEPRINTS[w - 2];
+    const nodes = makeWorld(w, nextId, prevGateway, w === TOTAL_WORLDS);
+    TREE.push(...nodes);
+    prevGateway = nextId + bp.nodes.length - 1; // gateway = last CORE node (before the bonus grid)
+    nextId += nodes.length;
   }
 }
 
