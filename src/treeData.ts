@@ -341,8 +341,9 @@ export function rebirthMultiplier(rebirths: number): number {
 }
 
 // The World 1 "Points" hoard — the absurd pile the bonus tree pours out — now
-// pays for itself: holding enough Points grants a global multiplier on EVERY
-// world's output. Tiers are ascending; the highest one you've reached applies.
+// pays for itself: holding enough Multiplier grants a global multiplier on EVERY
+// world's output. These are the named anchor tiers; past the top one the boost
+// keeps growing FOREVER — see hoardMultiplier (no cap).
 export const HOARD_TIERS: { at: number; mul: number }[] = [
   { at: 1e6, mul: 1.5 }, //   1,000,000
   { at: 1e7, mul: 3 }, //    10,000,000
@@ -351,16 +352,32 @@ export const HOARD_TIERS: { at: number; mul: number }[] = [
   { at: 1e11, mul: 10 }, // 100,000,000,000
 ];
 
-/** Global output multiplier from holding `points` of World 1 currency. */
+// Above the top anchor the boost rises by this much for each extra ×10 held —
+// matching the final visible step (×8.5 → ×10 across one decade).
+const HOARD_PER_DECADE = 1.5;
+const TOP_TIER = HOARD_TIERS[HOARD_TIERS.length - 1]; // { at: 1e11, mul: 10 }
+const TOP_DECADE = Math.log10(TOP_TIER.at); // 11
+
+/** Global output multiplier from holding `points` of Multiplier. Unbounded:
+ *  steps up by HOARD_PER_DECADE for every power of ten beyond the top anchor. */
 export function hoardMultiplier(points: number): number {
+  if (points >= TOP_TIER.at) {
+    const decades = Math.floor(Math.log10(points)) - TOP_DECADE; // 0 at 1e11
+    return TOP_TIER.mul + HOARD_PER_DECADE * decades;
+  }
   let mul = 1;
   for (const t of HOARD_TIERS) if (points >= t.at) mul = t.mul;
   return mul;
 }
 
-/** The next hoard tier above `points`, or null once the top tier is reached. */
-export function nextHoardTier(points: number): { at: number; mul: number } | null {
-  return HOARD_TIERS.find((t) => points < t.at) ?? null;
+/** The next tier above `points` (its threshold + the multiplier it grants).
+ *  Never null — past the table, the next ×10 step is synthesised on the fly. */
+export function nextHoardTier(points: number): { at: number; mul: number } {
+  const within = HOARD_TIERS.find((t) => points < t.at);
+  if (within) return within;
+  const decade = Math.max(TOP_DECADE, Math.floor(Math.log10(points))); // current ×10 step
+  const at = Math.pow(10, decade + 1);
+  return { at, mul: hoardMultiplier(at) };
 }
 
 /** (Re)build the whole game for a rebirth count: TOTAL_WORLDS + rebirths worlds,
