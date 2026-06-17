@@ -329,6 +329,29 @@ export function rebirthMultiplier(rebirths: number): number {
   return Math.max(1, rebirths);
 }
 
+// The World 1 "Points" hoard — the absurd pile the bonus tree pours out — now
+// pays for itself: holding enough Points grants a global multiplier on EVERY
+// world's output. Tiers are ascending; the highest one you've reached applies.
+export const HOARD_TIERS: { at: number; mul: number }[] = [
+  { at: 1e6, mul: 1.5 }, //   1,000,000
+  { at: 1e7, mul: 3 }, //    10,000,000
+  { at: 1e8, mul: 5 }, //   100,000,000
+  { at: 1e10, mul: 8.5 }, //  10,000,000,000
+  { at: 1e11, mul: 10 }, // 100,000,000,000
+];
+
+/** Global output multiplier from holding `points` of World 1 currency. */
+export function hoardMultiplier(points: number): number {
+  let mul = 1;
+  for (const t of HOARD_TIERS) if (points >= t.at) mul = t.mul;
+  return mul;
+}
+
+/** The next hoard tier above `points`, or null once the top tier is reached. */
+export function nextHoardTier(points: number): { at: number; mul: number } | null {
+  return HOARD_TIERS.find((t) => points < t.at) ?? null;
+}
+
 /** (Re)build the whole game for a rebirth count: TOTAL_WORLDS + rebirths worlds,
  *  the last of which ends in a Rebirth node. Updates the exported TREE/WORLDS. */
 export function rebuildGame(rebirths: number): void {

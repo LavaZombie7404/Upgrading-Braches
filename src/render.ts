@@ -37,7 +37,10 @@ export class GameUI {
   private elPointsLabel!: HTMLElement;
   private elPerSec!: HTMLElement;
   private elPerClick!: HTMLElement;
+  private elHoard!: HTMLElement;
   private elRebirths!: HTMLElement;
+  /** Last hoard multiplier shown, so we only toast when a new tier is reached. */
+  private lastHoardMul = 1;
   private worldSelect!: HTMLSelectElement;
   private boardEl!: HTMLElement;
   private toastLayer!: HTMLElement;
@@ -90,8 +93,11 @@ export class GameUI {
       pointsStat,
       stat('Per second', (this.elPerSec = el('span', 'hud__value'))),
       stat('Per click', (this.elPerClick = el('span', 'hud__value'))),
+      stat('Hoard bonus', (this.elHoard = el('span', 'hud__value hud__value--hoard'))),
       stat('Rebirths', (this.elRebirths = el('span', 'hud__value hud__value--rebirth')))
     );
+    this.elHoard.textContent = '×1';
+    this.lastHoardMul = 1;
     this.elRebirths.textContent = this.rebirthLabel();
 
     // World picker.
@@ -146,6 +152,19 @@ export class GameUI {
 
   private rebirthLabel(): string {
     return this.rebirths > 0 ? `${this.rebirths} (×${rebirthMultiplier(this.rebirths)})` : '0';
+  }
+
+  /** Update the "Hoard bonus" readout from the current World 1 Points pile.
+   *  `announce` toasts when a new (higher) tier is reached. */
+  updateHoard(mul: number, amount: number, next: { at: number; mul: number } | null, announce: boolean): void {
+    this.elHoard.textContent = `×${mul}`;
+    this.elHoard.title = next
+      ? `Holding World 1 Points boosts ALL output. Next: ×${next.mul} at ${formatNumber(next.at)} (you have ${formatNumber(amount)}).`
+      : `Holding World 1 Points boosts ALL output. Maxed at ×${mul}.`;
+    if (announce && mul > this.lastHoardMul) {
+      this.showToast(`💰 Hoard bonus → ×${mul} on all output!`);
+    }
+    this.lastHoardMul = mul;
   }
 
   /** Rebuild the whole UI for a (possibly changed) world count after a rebirth

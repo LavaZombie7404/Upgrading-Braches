@@ -206,6 +206,17 @@ test('the bonus tree reveals after Unlock World 2 and pays out big', async ({ pa
   await expect(hudValue(page, 'Per click')).toHaveText('10.00K');
 });
 
+test('hoarding World 1 Points grants a global multiplier on all output', async ({ page }) => {
+  // Own the root (+1 per click, so base per-click is 2) and bank 2,000,000
+  // World 1 Points — over the 1M tier, which boosts ALL output ×1.5.
+  await seedSave(page, mkSave([0], { 0: { points: 2_000_000, totalEarned: 2_000_000 } }));
+  await page.goto('/');
+
+  await expect(hudValue(page, 'Hoard bonus')).toHaveText('×1.5');
+  // Base per-click 2 × the 1.5 hoard bonus = 3.
+  await expect(hudValue(page, 'Per click')).toHaveText('3');
+});
+
 test('rebirths grant a global multiplier and extra worlds', async ({ page }) => {
   // Start with 2 rebirths banked (no purchases needed).
   await seedSave(page, mkSave([], {}, 2));

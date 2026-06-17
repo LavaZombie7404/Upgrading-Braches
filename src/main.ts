@@ -4,7 +4,7 @@ import './styles/main.scss';
 import { Engine } from './engine';
 import { GameUI } from './render';
 import { loadSave, writeSave, clearSave } from './save';
-import { TREE, rebuildGame, rebirthMultiplier } from './treeData';
+import { TREE, rebuildGame, rebirthMultiplier, hoardMultiplier, nextHoardTier } from './treeData';
 
 async function start(): Promise<void> {
   const root = document.getElementById('app');
@@ -18,6 +18,10 @@ async function start(): Promise<void> {
   const engine = await Engine.load();
   if (saved) engine.restore(saved);
   engine.setGlobalMul(rebirthMultiplier(rebirths));
+
+  // The engine's global multiplier = rebirth bonus × hoard bonus. We track the
+  // last value pushed so the per-frame sync only recomputes when it changes.
+  let lastGlobal = -1;
 
   const save = () => writeSave({ ...engine.serialize(), rebirths });
 
@@ -33,10 +37,26 @@ async function start(): Promise<void> {
       rebuildGame(0);
       engine.loadTree();
       engine.setGlobalMul(rebirthMultiplier(0));
+      lastGlobal = -1;
       clearSave();
       ui.rebuild(0);
     },
   });
+
+  // Recompute the global multiplier from live state (rebirth × hoard tier),
+  // push it to the engine only when it changes, and refresh the HUD readout.
+  // `announce` toasts a newly-reached hoard tier; we pass false when seeding.
+  function syncGlobal(announce: boolean): void {
+    const hoard = engine.pointsOf(0); // World 1 "Points" — the bonus-tree pile
+    const hoardMul = hoardMultiplier(hoard);
+    const combined = rebirthMultiplier(rebirths) * hoardMul;
+    if (combined !== lastGlobal) {
+      lastGlobal = combined;
+      engine.setGlobalMul(combined);
+    }
+    ui.updateHoard(hoardMul, hoard, nextHoardTier(hoard), announce);
+  }
+  syncGlobal(false); // seed the HUD + engine without toasting already-earned tiers
 
   // Beating the last world: +1 rebirth and +1 world, with a bigger global
   // multiplier. Everything else RESETS — purchases and all currencies are wiped
@@ -47,6 +67,7 @@ async function start(): Promise<void> {
     rebuildGame(rebirths);
     engine.loadTree(); // fresh tree: nothing purchased, all currencies at zero
     engine.setGlobalMul(rebirthMultiplier(rebirths));
+    lastGlobal = -1; // hoard pile is wiped too; let the next sync re-derive it
     save();
     ui.rebuild(rebirths);
   }
@@ -71,6 +92,7 @@ async function start(): Promise<void> {
     if (dt > 1) dt = 1;
 
     engine.tick(dt);
+    syncGlobal(true);
     ui.refresh();
 
     sinceSave += dt;
