@@ -4,7 +4,7 @@ import './styles/main.scss';
 import { Engine } from './engine';
 import { GameUI } from './render';
 import { loadSave, writeSave, clearSave } from './save';
-import { TREE, rebuildGame, rebirthMultiplier, hoardMultiplier, nextHoardTier } from './treeData';
+import { TREE, rebuildGame, rebirthMultiplier, hoardMultiplier, nextHoardTier, worldIndex, BONUS_WORLD_ID } from './treeData';
 
 async function start(): Promise<void> {
   const root = document.getElementById('app');
@@ -47,7 +47,7 @@ async function start(): Promise<void> {
   // push it to the engine only when it changes, and refresh the HUD readout.
   // `announce` toasts a newly-reached hoard tier; we pass false when seeding.
   function syncGlobal(announce: boolean): void {
-    const hoard = engine.pointsOf(0); // World 1 "Points" — the bonus-tree pile
+    const hoard = engine.pointsOf(worldIndex(BONUS_WORLD_ID)); // your Multiplier stash
     const hoardMul = hoardMultiplier(hoard);
     const combined = rebirthMultiplier(rebirths) * hoardMul;
     if (combined !== lastGlobal) {

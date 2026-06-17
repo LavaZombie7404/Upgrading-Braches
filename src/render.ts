@@ -93,7 +93,7 @@ export class GameUI {
       pointsStat,
       stat('Per second', (this.elPerSec = el('span', 'hud__value'))),
       stat('Per click', (this.elPerClick = el('span', 'hud__value'))),
-      stat('Hoard bonus', (this.elHoard = el('span', 'hud__value hud__value--hoard'))),
+      stat('Boost', (this.elHoard = el('span', 'hud__value hud__value--hoard'))),
       stat('Rebirths', (this.elRebirths = el('span', 'hud__value hud__value--rebirth')))
     );
     this.elHoard.textContent = '×1';
@@ -154,15 +154,15 @@ export class GameUI {
     return this.rebirths > 0 ? `${this.rebirths} (×${rebirthMultiplier(this.rebirths)})` : '0';
   }
 
-  /** Update the "Hoard bonus" readout from the current World 1 Points pile.
+  /** Update the "Boost" readout from the current Multiplier stash.
    *  `announce` toasts when a new (higher) tier is reached. */
   updateHoard(mul: number, amount: number, next: { at: number; mul: number } | null, announce: boolean): void {
     this.elHoard.textContent = `×${mul}`;
     this.elHoard.title = next
-      ? `Holding World 1 Points boosts ALL output. Next: ×${next.mul} at ${formatNumber(next.at)} (you have ${formatNumber(amount)}).`
-      : `Holding World 1 Points boosts ALL output. Maxed at ×${mul}.`;
+      ? `Your Multiplier stash boosts ALL output. Next: ×${next.mul} at ${formatNumber(next.at)} Multiplier (you have ${formatNumber(amount)}).`
+      : `Your Multiplier stash boosts ALL output. Maxed at ×${mul}.`;
     if (announce && mul > this.lastHoardMul) {
-      this.showToast(`💰 Hoard bonus → ×${mul} on all output!`);
+      this.showToast(`💰 Boost → ×${mul} on all output!`);
     }
     this.lastHoardMul = mul;
   }

@@ -55,6 +55,14 @@ export interface World {
 /** Total number of worlds. Must match the number of WORLD1 + BLUEPRINTS below. */
 export const TOTAL_WORLDS = 7;
 
+// The bonus ("useless") tree is its OWN board with its OWN currency. You don't
+// spend it on the main game — instead, holding enough of it boosts ALL output
+// (see HOARD_TIERS). It's a side branch off World 1's gateway, so it carries a
+// high world id and is listed last (never shifting the linear worlds' indices).
+export const BONUS_WORLD_ID = 100;
+export const BONUS_CURRENCY = 'Multiplier';
+const BONUS_UNLOCK_NODE_ID = 17; // World 1's "Unlock World 2" gateway
+
 // A short, human-readable summary of a node's effect (used in labels/tooltips).
 export function effectText(n: TreeNode): string {
   if (n.isRebirth) return '★ Rebirth ★';
@@ -73,10 +81,11 @@ export function effectText(n: TreeNode): string {
   }
 }
 
-// The World 1 "bonus" tree — a deliberately oversized big-number playground in
-// World 1's (disposable) currency, revealed once "Unlock World 2" is bought.
-// Generated, so its size is just two constants. Root is fixed (the test relies
-// on it) and a grid of escalating +click/+sec nodes hangs beneath it.
+// The bonus ("useless") tree — a deliberately oversized big-number playground
+// that mints its OWN currency (Multiplier), revealed once "Unlock World 2" is
+// bought. Generated, so its size is just two constants. The root is free so you
+// can bootstrap Multiplier by clicking; a grid of escalating +click/+sec nodes
+// (paid for in Multiplier) hangs beneath it.
 const BONUS_COLS = 7;
 const BONUS_ROWS = 7; // 1 root + BONUS_COLS * BONUS_ROWS grid nodes
 const BONUS_NAMES: string[] = [
@@ -94,8 +103,9 @@ const BONUS_NAMES: string[] = [
 ];
 
 function makeBonusTree(start: number, rootParent: number): TreeNode[] {
+  // Root is FREE so a fresh Multiplier board can be bootstrapped by clicking.
   const nodes: TreeNode[] = [
-    { id: start, name: BONUS_NAMES[0], desc: 'The number goes up. +10K per click.', cost: 20_000, parent: rootParent, effect: Effect.ClickAdd, value: 10_000, world: 1, col: 4, row: 8 },
+    { id: start, name: BONUS_NAMES[0], desc: 'Free. +10K Multiplier per click — start here.', cost: 0, parent: rootParent, effect: Effect.ClickAdd, value: 10_000, world: BONUS_WORLD_ID, col: 4, row: 0 },
   ];
   for (let r = 0; r < BONUS_ROWS; r++) {
     for (let c = 0; c < BONUS_COLS; c++) {
@@ -107,14 +117,14 @@ function makeBonusTree(start: number, rootParent: number): TreeNode[] {
       nodes.push({
         id,
         name: BONUS_NAMES[1 + k],
-        desc: isClick ? 'Bigger clicks. Pure flex.' : 'Automated smugness.',
-        cost: value * 3,
+        desc: isClick ? '+Multiplier per click.' : '+Multiplier per second.',
+        cost: value * 3, // paid in Multiplier
         parent,
         effect: isClick ? Effect.ClickAdd : Effect.SecAdd,
         value,
-        world: 1,
+        world: BONUS_WORLD_ID,
         col: c + 1,
-        row: 9 + r,
+        row: 1 + r,
       });
     }
   }
@@ -158,9 +168,10 @@ const WORLD1: TreeNode[] = [
   // Row 7 — the gateway --------------------------------------------------------
   { id: 17, name: 'Unlock World 2', desc: 'Opens the gateway to World 2.', cost: 175000, parent: 16, effect: Effect.GlobalMul, value: 1, unlocksWorld: 2, world: 1, col: 4, row: 7 },
 
-  // Rows 8+ — the big bonus tree (generated). Revealed once "Unlock World 2"
-  // is bought; pays out absurd amounts of World 1 currency you've outgrown.
-  ...makeBonusTree(18, 17),
+  // The bonus tree (generated) lives on its OWN board (BONUS_WORLD_ID) in its
+  // own Multiplier currency, but its node ids follow World 1's and its root
+  // hangs off the gateway, so it's revealed once "Unlock World 2" is bought.
+  ...makeBonusTree(18, BONUS_UNLOCK_NODE_ID),
 ];
 
 /** Each generated world deals in ~WORLD_SCALE× bigger numbers than the previous. */
@@ -369,6 +380,11 @@ export function rebuildGame(rebirths: number): void {
     prevGateway = nextId + bp.nodes.length - 1; // gateway = the world's last node
     nextId += nodes.length;
   }
+
+  // The bonus tree's board. Listed LAST so its presence never shifts the linear
+  // worlds' engine indices (old saves keep their per-world balances). Unlocked
+  // once World 1's gateway is bought.
+  worlds.push({ id: BONUS_WORLD_ID, name: 'Multiplier', currency: BONUS_CURRENCY, unlockNodeId: BONUS_UNLOCK_NODE_ID });
 
   TREE = tree;
   WORLDS = worlds;

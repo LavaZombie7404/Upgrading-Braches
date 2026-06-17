@@ -1,8 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
-import { TREE } from '../src/treeData';
+import { TREE, BONUS_WORLD_ID } from '../src/treeData';
 
 const SAVE_KEY = 'upgrade-tree.save.v1';
-const NUM_WORLDS = 7;
+const NUM_WORLDS = 7; // linear worlds (World 1..7)
+// The Multiplier board is appended after the linear worlds, so with 0 rebirths
+// it sits at engine index NUM_WORLDS and the dropdown shows NUM_WORLDS + 1 entries.
+const MULT_WORLD_INDEX = NUM_WORLDS;
+const BOARDS = NUM_WORLDS + 1;
 
 interface WorldSave {
   points: number;
@@ -34,7 +38,7 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 /** Build a SaveState; `balances` maps a 0-based world index to its balance. */
 const mkSave = (purchased: number[], balances: Record<number, WorldSave> = {}, rebirths = 0): SaveState => ({
   purchased,
-  worlds: Array.from({ length: NUM_WORLDS }, (_, i) => balances[i] ?? ZERO),
+  worlds: Array.from({ length: BOARDS }, (_, i) => balances[i] ?? ZERO),
   rebirths,
 });
 
@@ -62,7 +66,7 @@ test('boots with only the free root node revealed', async ({ page }) => {
 
 test('the world dropdown lists every world, locked until reached', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.world-select option')).toHaveCount(NUM_WORLDS);
+  await expect(page.locator('.world-select option')).toHaveCount(BOARDS);
   await expect(worldOption(page, 'World 1')).toHaveJSProperty('disabled', false);
   await expect(worldOption(page, 'World 7')).toHaveJSProperty('disabled', true);
 });
@@ -144,9 +148,10 @@ test('World 2 is locked in the dropdown until its gateway is bought', async ({ p
   await gate.click();
   await expect(gate).toHaveClass(/is-purchased/);
 
-  // World 2 is now selectable, and a toast announces it.
+  // World 2 is now selectable, and a toast announces it. (Buying the gateway
+  // also reveals the Multiplier board, so scope the assertion to World 2's toast.)
   await expect(worldOption(page, 'World 2')).toHaveJSProperty('disabled', false);
-  await expect(page.locator('.toast')).toContainText('World 2 unlocked');
+  await expect(page.locator('.toast', { hasText: 'World 2 unlocked' })).toBeVisible();
 });
 
 test('each world keeps its own independent currency', async ({ page }) => {
@@ -192,28 +197,33 @@ test('completing a world unlocks the next one via its gateway', async ({ page })
   await expect(page.locator('.toast')).toContainText('World 3 unlocked');
 });
 
-test('the bonus tree reveals after Unlock World 2 and pays out big', async ({ page }) => {
-  // Only the gateway owned, so World 1 per-click is the base 1 and the bonus
-  // tree (which hangs off the gateway) is revealed. Fund the first bonus node.
-  await seedSave(page, mkSave([17], { 0: { points: 50_000, totalEarned: 50_000 } }));
+test('the Multiplier board unlocks after Unlock World 2 and mints its own currency', async ({ page }) => {
+  // Gateway owned, so the Multiplier board is revealed with its own currency.
+  await seedSave(page, mkSave([17]));
   await page.goto('/');
 
-  await expect(hudValue(page, 'Per click')).toHaveText('1');
+  // Switch to the Multiplier board; its currency is labelled "Multiplier".
+  await page.locator('.world-select').selectOption(String(BONUS_WORLD_ID));
+  await expect(page.locator('.hud__stat--points .hud__label')).toHaveText('Multiplier');
+
+  // Its free root mints Multiplier: buying it makes per-click 10.00K (here, in
+  // Multiplier), and World 1's own currency is untouched by it.
   const bragging = node(page, 'Bragging Rights');
   await expect(bragging).toBeVisible();
-  await bragging.click(); // +10,000 per click
+  await expect(bragging).toContainText('free');
+  await bragging.click();
   await expect(bragging).toHaveClass(/is-purchased/);
   await expect(hudValue(page, 'Per click')).toHaveText('10.00K');
 });
 
-test('hoarding World 1 Points grants a global multiplier on all output', async ({ page }) => {
-  // Own the root (+1 per click, so base per-click is 2) and bank 2,000,000
-  // World 1 Points — over the 1M tier, which boosts ALL output ×1.5.
-  await seedSave(page, mkSave([0], { 0: { points: 2_000_000, totalEarned: 2_000_000 } }));
+test('holding Multiplier currency boosts all output', async ({ page }) => {
+  // Own World 1's root (+1/click, base per-click 2) and bank 2,000,000
+  // Multiplier — over the 1M tier, which boosts ALL output ×1.5.
+  await seedSave(page, mkSave([0], { [MULT_WORLD_INDEX]: { points: 2_000_000, totalEarned: 2_000_000 } }));
   await page.goto('/');
 
-  await expect(hudValue(page, 'Hoard bonus')).toHaveText('×1.5');
-  // Base per-click 2 × the 1.5 hoard bonus = 3.
+  await expect(hudValue(page, 'Boost')).toHaveText('×1.5');
+  // World 1 base per-click 2 × the 1.5 boost = 3.
   await expect(hudValue(page, 'Per click')).toHaveText('3');
 });
 
@@ -225,8 +235,8 @@ test('rebirths grant a global multiplier and extra worlds', async ({ page }) => 
   // Base per-click is ×2 (the rebirth multiplier), and the HUD shows the count.
   await expect(hudValue(page, 'Per click')).toHaveText('2');
   await expect(hudValue(page, 'Rebirths')).toContainText('2');
-  // 7 base worlds + 2 from rebirths = 9.
-  await expect(page.locator('.world-select option')).toHaveCount(9);
+  // 7 base worlds + 2 from rebirths + the Multiplier board = 10.
+  await expect(page.locator('.world-select option')).toHaveCount(BOARDS + 2);
 });
 
 test('beating the last world grants a rebirth and adds a world', async ({ page }) => {
@@ -238,7 +248,7 @@ test('beating the last world grants a rebirth and adds a world', async ({ page }
   ));
   await page.goto('/');
 
-  await expect(page.locator('.world-select option')).toHaveCount(7); // 0 rebirths
+  await expect(page.locator('.world-select option')).toHaveCount(BOARDS); // 0 rebirths
 
   await page.locator('.world-select').selectOption(String(NUM_WORLDS));
   const rebirth = node(page, 'Rebirth');
@@ -247,7 +257,7 @@ test('beating the last world grants a rebirth and adds a world', async ({ page }
 
   // Gained a rebirth: HUD count goes up, a new (8th) world appears, toast fires.
   await expect(hudValue(page, 'Rebirths')).toContainText('1');
-  await expect(page.locator('.world-select option')).toHaveCount(8);
+  await expect(page.locator('.world-select option')).toHaveCount(BOARDS + 1);
   await expect(page.locator('.toast')).toContainText('Rebirth');
 
   // ...and progress is RESET: back on World 1 at zero, World 2 locked again.
