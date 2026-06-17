@@ -85,6 +85,13 @@
     }
   }
 
+  // Revealed preview of an upcoming (not-yet-unlocked) row in the infinite
+  // Multiplier tree — dimmed, so you can see the tree keeps going.
+  &.is-preview {
+    opacity: 0.4;
+    cursor: default;
+  }
+
   &.is-buyable {
     background: v.$node-buyable;
     border-color: v.$accent;

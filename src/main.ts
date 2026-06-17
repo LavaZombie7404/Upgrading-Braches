@@ -4,12 +4,11 @@ import './styles/main.scss';
 import { Engine } from './engine';
 import { GameUI } from './render';
 import { loadSave, writeSave, clearSave } from './save';
-import { TREE, rebuildGame, rebirthMultiplier, hoardMultiplier, nextHoardTier, worldIndex, BONUS_WORLD_ID, BONUS_ROWS } from './treeData';
+import { TREE, rebuildGame, rebirthMultiplier, hoardMultiplier, nextHoardTier, worldIndex, BONUS_WORLD_ID, BONUS_ROWS, BONUS_REVEAL_AHEAD, BONUS_MAX_ROW } from './treeData';
 
-// The infinite Multiplier tree grows in chunks: whenever you buy within
-// GROW_MARGIN rows of the current bottom, append GROW_STEP more rows.
-const GROW_STEP = 5;
-const GROW_MARGIN = 2;
+// The infinite Multiplier tree generates rows ahead of the player in chunks of
+// GROW_STEP, so there are always BONUS_REVEAL_AHEAD rows visible below them.
+const GROW_STEP = 8;
 
 async function start(): Promise<void> {
   const root = document.getElementById('app');
@@ -36,7 +35,7 @@ async function start(): Promise<void> {
     onBuy: (id) => {
       if (!engine.buy(id)) return;
       if (TREE[id]?.isRebirth) doRebirth();
-      else if (growBonusIfNeeded(id)) return; // grew + saved + re-rendered
+      else if (ensureBonusBuffer(true)) return; // grew + saved + re-rendered
       else save();
     },
     onHardReset: () => {
@@ -51,25 +50,43 @@ async function start(): Promise<void> {
     },
   });
 
-  // Keep the Multiplier tree endless: if `id` is a bonus node within GROW_MARGIN
-  // of the current bottom, append GROW_STEP rows, reload the engine onto the
-  // bigger tree (preserving all purchases + balances), and re-render in place.
-  // Returns true if it grew (and handled saving/rendering).
-  function growBonusIfNeeded(id: number): boolean {
-    const node = TREE[id];
-    if (!node || node.world !== BONUS_WORLD_ID) return false;
-    const bottomRow = BONUS_ROWS + bonusRows; // deepest existing board row
-    if (node.row < bottomRow - GROW_MARGIN) return false;
-
-    const state = engine.serialize(); // purchases + per-world balances
-    bonusRows += GROW_STEP;
-    rebuildGame(rebirths, bonusRows);
-    engine.restore(state); // reload onto the now-bigger tree (new rows unowned)
-    lastGlobal = -1; // force a re-push next sync (globalMul was reset by loadTree)
-    ui.rebuildBoard(); // re-render the current board with the new rows, in place
-    save();
-    return true;
+  // Deepest Multiplier-tree board row the player has reached (bought or revealed
+  // as buyable) — their "frontier".
+  function bonusFrontierRow(): number {
+    let row = -1;
+    for (const n of TREE) {
+      if (n.world !== BONUS_WORLD_ID) continue;
+      if (engine.isPurchased(n.id) || engine.isUnlocked(n.id)) row = Math.max(row, n.row);
+    }
+    return row;
   }
+
+  // Keep the Multiplier tree endless: ensure BONUS_REVEAL_AHEAD rows exist below
+  // the frontier (so the board always visibly continues downward). Grows in
+  // GROW_STEP chunks, reloading the engine onto the bigger tree (purchases +
+  // balances preserved). Returns true if it grew (and handled save/re-render).
+  function ensureBonusBuffer(rerender: boolean): boolean {
+    let grew = false;
+    let guard = 0;
+    while (
+      BONUS_ROWS + bonusRows < bonusFrontierRow() + BONUS_REVEAL_AHEAD &&
+      BONUS_ROWS + bonusRows < BONUS_MAX_ROW && // stop before 4^row overflows to ∞
+      guard++ < 100
+    ) {
+      const state = engine.serialize(); // purchases + per-world balances
+      bonusRows += GROW_STEP;
+      rebuildGame(rebirths, bonusRows);
+      engine.restore(state); // reload onto the now-bigger tree (new rows unowned)
+      grew = true;
+    }
+    if (grew) {
+      lastGlobal = -1; // globalMul was reset by loadTree; re-push next sync
+      if (rerender) ui.rebuildBoard();
+      save();
+    }
+    return grew;
+  }
+  ensureBonusBuffer(false); // generate the initial buffer for the loaded save
 
   // Recompute the global multiplier from live state (rebirth × hoard tier),
   // push it to the engine only when it changes, and refresh the HUD readout.

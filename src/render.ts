@@ -6,7 +6,7 @@
 // rebirth count (used for HUD display).
 
 import { Engine } from './engine';
-import { TREE, WORLDS, nodesForWorld, worldIndex, rebirthMultiplier, effectText, type TreeNode } from './treeData';
+import { TREE, WORLDS, nodesForWorld, worldIndex, rebirthMultiplier, effectText, BONUS_WORLD_ID, BONUS_REVEAL_AHEAD, type TreeNode } from './treeData';
 import { formatNumber } from './format';
 
 // Layout constants (px).
@@ -291,19 +291,35 @@ export class GameUI {
       }
     }
 
-    for (const n of nodesForWorld(this.currentWorld)) {
+    const worldNodes = nodesForWorld(this.currentWorld);
+    // The infinite Multiplier tree previews a few rows below the player's
+    // frontier so it visibly keeps going; other worlds reveal one row ahead.
+    const isBonus = this.currentWorld === BONUS_WORLD_ID;
+    let revealLimit = -Infinity;
+    if (isBonus) {
+      let frontier = -1;
+      for (const n of worldNodes) {
+        if (this.engine.isPurchased(n.id) || this.engine.isUnlocked(n.id)) frontier = Math.max(frontier, n.row);
+      }
+      revealLimit = frontier + BONUS_REVEAL_AHEAD;
+    }
+
+    for (const n of worldNodes) {
       const btn = this.nodeEls.get(n.id)!;
       const purchased = this.engine.isPurchased(n.id);
       const buyable = !purchased && this.engine.isBuyable(n.id);
       const unlocked = !purchased && this.engine.isUnlocked(n.id);
 
-      // Locked nodes (prerequisite not yet met) stay hidden until revealed.
-      const visible = purchased || unlocked;
+      // Locked nodes stay hidden until revealed; the Multiplier tree also
+      // previews upcoming (not-yet-unlocked) rows so it reads as endless.
+      const preview = isBonus && !purchased && !unlocked && n.row <= revealLimit;
+      const visible = purchased || unlocked || preview;
       btn.hidden = !visible;
 
       setClass(btn, 'is-purchased', purchased);
       setClass(btn, 'is-buyable', buyable);
       setClass(btn, 'is-unlocked', unlocked && !buyable); // unlocked but can't afford
+      setClass(btn, 'is-preview', preview); // revealed but prerequisite not yet met
       btn.disabled = !buyable;
 
       const cost = (btn as HTMLButtonElement & { _cost?: HTMLElement })._cost!;

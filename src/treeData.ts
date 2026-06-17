@@ -61,6 +61,14 @@ export const TOTAL_WORLDS = 7;
 // high world id and is listed last (never shifting the linear worlds' indices).
 export const BONUS_WORLD_ID = 100;
 export const BONUS_CURRENCY = 'Multiplier';
+/** How many rows BELOW the player's frontier the Multiplier tree reveals, so it
+ *  visibly continues downward (the game keeps this many rows generated ahead). */
+export const BONUS_REVEAL_AHEAD = 4;
+/** Hard depth cap for the bonus tree. Past here a row's payout (10K·4^row) would
+ *  overflow a 64-bit float to Infinity and break the economy (Inf−Inf = NaN), so
+ *  we stop growing. ~470 rows of 4× growth is astronomically deep — effectively
+ *  infinite for play, just safely finite for the math. */
+export const BONUS_MAX_ROW = 470;
 const BONUS_UNLOCK_NODE_ID = 17; // World 1's "Unlock World 2" gateway
 const BONUS_BASE_START = 18; // first id of the bonus tree (right after World 1)
 
