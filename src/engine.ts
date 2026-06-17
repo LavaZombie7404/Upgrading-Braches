@@ -160,7 +160,9 @@ export interface GameState {
   worlds: WorldSave[];
 }
 
-/** Full persisted save: engine state plus the host-owned rebirth count. */
+/** Full persisted save: engine state plus host-owned progression (rebirth count
+ *  and how many extra rows the infinite bonus tree has grown). */
 export interface SaveState extends GameState {
   rebirths: number;
+  bonusExtraRows?: number;
 }

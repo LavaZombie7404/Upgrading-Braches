@@ -62,6 +62,7 @@ export const TOTAL_WORLDS = 7;
 export const BONUS_WORLD_ID = 100;
 export const BONUS_CURRENCY = 'Multiplier';
 const BONUS_UNLOCK_NODE_ID = 17; // World 1's "Unlock World 2" gateway
+const BONUS_BASE_START = 18; // first id of the bonus tree (right after World 1)
 
 // A short, human-readable summary of a node's effect (used in labels/tooltips).
 export function effectText(n: TreeNode): string {
@@ -87,7 +88,9 @@ export function effectText(n: TreeNode): string {
 // can bootstrap Multiplier by clicking; a grid of escalating +click/+sec nodes
 // (paid for in Multiplier) hangs beneath it.
 const BONUS_COLS = 7;
-const BONUS_ROWS = 7; // 1 root + BONUS_COLS * BONUS_ROWS grid nodes
+/** Rows in the base bonus grid; also the deepest base board row (root is row 0,
+ *  grid rows are 1..BONUS_ROWS). The infinite extension stacks below this. */
+export const BONUS_ROWS = 7; // 1 root + BONUS_COLS * BONUS_ROWS grid nodes
 const BONUS_NAMES: string[] = [
   'Bragging Rights', 'Participation Trophy', 'Gold Star', 'Honorable Mention', 'Pat on the Back',
   'Inflated Ego', 'Number Go Brrr', 'Diminishing Returns', 'Sunk Cost Fallacy', 'More Cowbell',
@@ -102,6 +105,26 @@ const BONUS_NAMES: string[] = [
   'Strategic Pivot', 'Unicorn Status', 'Vanity Metric', 'Funny Number',
 ];
 
+// One grid cell of the bonus tree at depth `r` (0-based), column `c`. Deeper
+// rows pay 4× more (and cost 3× their payout), alternating click/sec. Shared by
+// the base grid and the (endless) extension so they look and scale identically.
+function bonusGridNode(id: number, parent: number, r: number, c: number): TreeNode {
+  const isClick = (r + c) % 2 === 0;
+  const value = 10_000 * Math.pow(4, r); // 10K, 40K, 160K, ... per row
+  return {
+    id,
+    name: BONUS_NAMES[(1 + r * BONUS_COLS + c) % BONUS_NAMES.length],
+    desc: isClick ? '+Multiplier per click.' : '+Multiplier per second.',
+    cost: value * 3, // paid in Multiplier
+    parent,
+    effect: isClick ? Effect.ClickAdd : Effect.SecAdd,
+    value,
+    world: BONUS_WORLD_ID,
+    col: c + 1,
+    row: 1 + r,
+  };
+}
+
 function makeBonusTree(start: number, rootParent: number): TreeNode[] {
   // Root is FREE so a fresh Multiplier board can be bootstrapped by clicking.
   const nodes: TreeNode[] = [
@@ -109,23 +132,27 @@ function makeBonusTree(start: number, rootParent: number): TreeNode[] {
   ];
   for (let r = 0; r < BONUS_ROWS; r++) {
     for (let c = 0; c < BONUS_COLS; c++) {
-      const k = r * BONUS_COLS + c;
-      const id = start + 1 + k;
+      const id = start + 1 + r * BONUS_COLS + c;
       const parent = r === 0 ? start : id - BONUS_COLS; // top row hangs off the root
-      const isClick = (r + c) % 2 === 0;
-      const value = 10_000 * Math.pow(4, r); // 10K, 40K, 160K, ... per row
-      nodes.push({
-        id,
-        name: BONUS_NAMES[1 + k],
-        desc: isClick ? '+Multiplier per click.' : '+Multiplier per second.',
-        cost: value * 3, // paid in Multiplier
-        parent,
-        effect: isClick ? Effect.ClickAdd : Effect.SecAdd,
-        value,
-        world: BONUS_WORLD_ID,
-        col: c + 1,
-        row: 1 + r,
-      });
+      nodes.push(bonusGridNode(id, parent, r, c));
+    }
+  }
+  return nodes;
+}
+
+// Endless extra depth for the bonus tree, given fresh ids that sit AFTER every
+// linear-world node so growing the tree never disturbs an existing id. Row 0 of
+// the extension hangs off the base grid's bottom row (`parentRow`); each later
+// row hangs off the one above. main.ts appends more rows as you buy near the
+// bottom, so the tree is effectively infinite (until 4^r overflows to ∞).
+function makeBonusExtension(start: number, rows: number, parentRow: number[]): TreeNode[] {
+  const nodes: TreeNode[] = [];
+  for (let i = 0; i < rows; i++) {
+    const r = BONUS_ROWS + i; // depth continues past the base grid
+    for (let c = 0; c < BONUS_COLS; c++) {
+      const id = start + i * BONUS_COLS + c;
+      const parent = i === 0 ? parentRow[c] : id - BONUS_COLS;
+      nodes.push(bonusGridNode(id, parent, r, c));
     }
   }
   return nodes;
@@ -171,7 +198,7 @@ const WORLD1: TreeNode[] = [
   // The bonus tree (generated) lives on its OWN board (BONUS_WORLD_ID) in its
   // own Multiplier currency, but its node ids follow World 1's and its root
   // hangs off the gateway, so it's revealed once "Unlock World 2" is bought.
-  ...makeBonusTree(18, BONUS_UNLOCK_NODE_ID),
+  ...makeBonusTree(BONUS_BASE_START, BONUS_UNLOCK_NODE_ID),
 ];
 
 /** Each generated world deals in ~WORLD_SCALE× bigger numbers than the previous. */
@@ -381,8 +408,9 @@ export function nextHoardTier(points: number): { at: number; mul: number } {
 }
 
 /** (Re)build the whole game for a rebirth count: TOTAL_WORLDS + rebirths worlds,
- *  the last of which ends in a Rebirth node. Updates the exported TREE/WORLDS. */
-export function rebuildGame(rebirths: number): void {
+ *  the last of which ends in a Rebirth node. `bonusExtraRows` adds depth to the
+ *  (infinite) bonus tree below its base grid. Updates the exported TREE/WORLDS. */
+export function rebuildGame(rebirths: number, bonusExtraRows = 0): void {
   const totalWorlds = TOTAL_WORLDS + rebirths;
   const tree: TreeNode[] = [...WORLD1];
   const worlds: World[] = [{ id: 1, name: 'World 1', currency: 'Points', unlockNodeId: null }];
@@ -396,6 +424,18 @@ export function rebuildGame(rebirths: number): void {
     tree.push(...nodes);
     prevGateway = nextId + bp.nodes.length - 1; // gateway = the world's last node
     nextId += nodes.length;
+  }
+
+  // Extra bonus-tree depth, appended with ids after every linear-world node so
+  // it never shifts an existing id. Its first row hangs off the base grid's
+  // bottom row (ids BONUS_BASE_START+1+(BONUS_ROWS-1)*COLS .. +COLS-1).
+  if (bonusExtraRows > 0) {
+    const parentRow: number[] = [];
+    for (let c = 0; c < BONUS_COLS; c++) {
+      parentRow.push(BONUS_BASE_START + 1 + (BONUS_ROWS - 1) * BONUS_COLS + c);
+    }
+    tree.push(...makeBonusExtension(nextId, bonusExtraRows, parentRow));
+    nextId += bonusExtraRows * BONUS_COLS;
   }
 
   // The bonus tree's board. Listed LAST so its presence never shifts the linear

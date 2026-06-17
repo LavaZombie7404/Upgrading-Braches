@@ -11,6 +11,7 @@ export function loadSave(): SaveState | null {
     const data = JSON.parse(raw) as SaveState;
     if (!Array.isArray(data.purchased) || !Array.isArray(data.worlds)) return null;
     if (typeof data.rebirths !== 'number' || data.rebirths < 0) data.rebirths = 0;
+    if (typeof data.bonusExtraRows !== 'number' || data.bonusExtraRows < 0) data.bonusExtraRows = 0;
     return data;
   } catch {
     return null;

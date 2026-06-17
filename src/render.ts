@@ -183,6 +183,13 @@ export class GameUI {
     }
   }
 
+  /** Re-render the current world's board after the tree structure changed
+   *  (e.g. the infinite Multiplier tree grew), keeping the current view/world. */
+  rebuildBoard(): void {
+    this.buildBoard(this.currentWorld);
+    this.refresh();
+  }
+
   /** Show a transient toast notification. */
   private showToast(message: string): void {
     const toast = el('div', 'toast');
